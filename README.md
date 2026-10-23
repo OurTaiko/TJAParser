@@ -65,7 +65,7 @@ tjaparser version                             算法版本，如 v1
 发布到服务器：
 
 ```bash
-cd dotnet~ && dotnet publish tjaparser -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o out
+cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # 自包含单文件、裁剪，选项在 tjaparser.csproj 里
 ```
 
 ## SongInfo 的结构

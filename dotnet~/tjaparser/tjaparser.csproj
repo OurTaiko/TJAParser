@@ -9,6 +9,12 @@
     <RootNamespace>OurTaiko.Cli</RootNamespace>
     <RollForward>Major</RollForward>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- `dotnet publish -r <rid>` gives one self-contained, trimmed file; set here rather than on
+         the command line so the properties do not reach the netstandard library it references. -->
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../OurTaiko.TjaParser/OurTaiko.TjaParser.csproj" />
