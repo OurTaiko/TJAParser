@@ -44,11 +44,12 @@ public class BlockTests
     [Fact]
     public void AnUnreadableBlockReportsItsErrorAndLeavesTheOthers()
     {
-        string text = Tja.Sample.Replace("1111,", "5,");
+        // A duplicate route marker is still an error (OpenTaiko tolerances are in ToleranceTests).
+        string text = Tja.Sample.Replace("1111,", "#BRANCHSTART p,50,80\n#N\n1111,\n#N\n1111,\n#BRANCHEND\n");
         var blocks = Tja.Blocks(text);
         Assert.False(blocks["Edit/single"].Ok);
         Assert.Null(blocks["Edit/single"].Hash);
-        Assert.Contains("8 tail", blocks["Edit/single"].Error);
+        Assert.Contains("Duplicate branch route", blocks["Edit/single"].Error);
         Assert.True(blocks["Oni/single"].Ok);
         Assert.Equal(Tja.Hashes(Tja.Sample)["Oni/single"], blocks["Oni/single"].Hash);
     }

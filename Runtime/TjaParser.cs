@@ -174,10 +174,20 @@ namespace OurTaiko
             // Per route, the latest bar line and the latest long-note end after it, for
             // OpenTaiko's branch judgement time (CTja.GetBranchJudgeChipTime).
             readonly double?[] lastBar = new double?[3], rollEndAfterBar = new double?[3];
-            ChartNote longNote;
+            // OpenTaiko keeps the open roll per route (nNowRollCountBranch): a head outside a route
+            // opens on all three, a head on a route only there. Closed heads are remembered so a
+            // second route closing a shared head keeps the first end.
+            readonly ChartNote[] openRoll = new ChartNote[3];
+            readonly HashSet<ChartNote> closedRolls = new HashSet<ChartNote>();
+            int measure;
             readonly List<ChartEntry> common = new List<ChartEntry>();
             List<ChartEntry>[] routeLists;
-            List<ChartEntry> Entries => branch == null ? common : routeLists[(int)route];
+            // Inside a branch but before its first #N/#E/#M the notes are common (OpenTaiko
+            // IsEndedBranching): they go to every route and the routes then start over them.
+            bool InRoute => branch != null && hasRoute;
+            int BranchId => InRoute ? branch.Id : -1;
+            List<ChartEntry> Entries => InRoute ? routeLists[(int)route] : common;
+            bool warnedCommonInBranch;
 
             public ChartReader(TaikoChart chart, List<int>[] balloons, ScrollMode mode)
             {
@@ -210,7 +220,8 @@ namespace OurTaiko
                 if (pending.Any(t => t[0] != '#')) { chart.Warnings.Add("Last measure without a comma"); Flush(); }
                 else FlushCommands();
                 if (branch != null) EndBranch(); // #BRANCHEND is optional before #END / the next branch.
-                CheckLongNote();
+                // OpenTaiko (TaikoJiro compatibility): #END ends unended rolls.
+                foreach (var note in OpenRolls()) { Warn("An unended roll is ended by #END"); CloseRoll(note, Entries); }
                 chart.Duration = Math.Max(chart.Duration, Now);
                 chart.Notes.Sort((a, b) => a.Time.CompareTo(b.Time));
                 chart.Bars.Sort((a, b) => a.Time.CompareTo(b.Time));
@@ -233,15 +244,41 @@ namespace OurTaiko
                 pending.Clear();
             }
 
-            void CheckLongNote()
+            // The distinct heads still open on the routes being written (one head may sit on several).
+            IEnumerable<ChartNote> OpenRolls()
             {
-                if (longNote != null) throw new FormatException("Long note is missing its 8 tail before a route boundary or #END.");
+                var seen = new HashSet<ChartNote>();
+                foreach (int r in Routes())
+                    if (openRoll[r] != null && seen.Add(openRoll[r])) yield return openRoll[r];
+            }
+
+            IEnumerable<int> Routes()
+            {
+                if (InRoute) yield return (int)route;
+                else for (int r = 0; r < 3; r++) yield return r;
+            }
+
+            // Ends a roll here on the routes being written. A head shared by several routes keeps
+            // the end the first route gave it (one ChartNote has one EndTime); a later route that
+            // ends it elsewhere is warned about, and still gets the tail entry in its own list.
+            void CloseRoll(ChartNote note, List<ChartEntry> entries)
+            {
+                if (closedRolls.Add(note))
+                {
+                    note.EndTime = Now;
+                    note.TailBpm = state.Bpm;
+                    note.EndScrollClock = state.Clock16 / 16;
+                }
+                else if (note.EndTime != Now) Warn($"A roll shared by the routes ends at different times; the first end is kept (measure {measure})");
+                foreach (int r in Routes())
+                    if (openRoll[r] == note) { openRoll[r] = null; rollEndAfterBar[r] = Math.Max(rollEndAfterBar[r] ?? Now, Now); }
+                entries.Add(new ChartEntry(note, true));
             }
 
             void EndBranch()
             {
-                CheckLongNote();
-                if (!routesSeen[0]) throw new FormatException("A branch must define #N exactly once.");
+                // OpenTaiko: a branch without #N plays an empty normal route.
+                if (!routesSeen[0]) Warn($"Branch {branch.Id} has no #N: its normal route is empty");
                 // Match Fanmade's image renderer: omitted E uses N; omitted M uses E.
                 if (!routesSeen[1]) branch.Routes[1] = BranchRoute.Normal;
                 if (!routesSeen[2]) branch.Routes[2] = branch.Routes[1];
@@ -255,7 +292,6 @@ namespace OurTaiko
             void StartBranch(string arg)
             {
                 if (branch != null) EndBranch();
-                CheckLongNote();
                 AddClockPoint();
                 branchStart = state.Copy();
                 branch = new ChartBranch { Id = chart.Branches.Count, Time = Now };
@@ -265,7 +301,7 @@ namespace OurTaiko
                 routeLists = new[] { new List<ChartEntry>(), new List<ChartEntry>(), new List<ChartEntry>() };
                 chart.NoteLists.AddRange(routeLists);
                 Array.Clear(routesSeen, 0, routesSeen.Length);
-                hasRoute = false;
+                hasRoute = false; warnedCommonInBranch = false;
             }
 
             // OpenTaiko judges a branch at the latest bar line before it (the start of the measure
@@ -284,7 +320,7 @@ namespace OurTaiko
             void Track(double?[] perRoute, double? value, bool latest = false)
             {
                 for (int r = 0; r < 3; r++)
-                    if (branch == null || r == (int)route) perRoute[r] = latest ? Math.Max(perRoute[r] ?? value.Value, value.Value) : value;
+                    if (!InRoute || r == (int)route) perRoute[r] = latest ? Math.Max(perRoute[r] ?? value.Value, value.Value) : value;
             }
 
             // OpenTaiko CTja #BRANCHSTART: `type, expert, master[, l|m]`; a missing comma after the
@@ -332,7 +368,6 @@ namespace OurTaiko
             void SelectRoute(BranchRoute selected)
             {
                 if (branch == null) throw new FormatException("Route marker without #BRANCHSTART.");
-                CheckLongNote();
                 if (routesSeen[(int)selected]) throw new FormatException("Duplicate branch route: " + selected);
                 routesSeen[(int)selected] = true;
                 state = branchStart.Copy(); route = selected; hasRoute = true; branchBar = true;
@@ -342,7 +377,7 @@ namespace OurTaiko
                 Beat = state.Beat, Bpm = state.Bpm, ScrollX = state.ScrollX, ScrollY = state.ScrollY,
                 ScrollMode = state.Mode, ScrollClock = state.Clock16 / 16, EndScrollClock = state.Clock16 / 16,
                 SuddenShow = state.SuddenShow, SuddenMove = state.SuddenMove,
-                BranchId = branch == null ? -1 : branch.Id, Route = route };
+                BranchId = BranchId, Route = route };
 
             // A route without a list, or past its end, gives 5 hits (OpenTaiko's default for an
             // empty list; past the end it leaves 0, which no balloon can be popped at).
@@ -355,17 +390,22 @@ namespace OurTaiko
 
             void SetGogo(bool on)
             {
-                chart.Gogos.Add(new ChartGogo { Time = Now, On = on, BranchId = branch == null ? -1 : branch.Id, Route = route });
+                chart.Gogos.Add(new ChartGogo { Time = Now, On = on, BranchId = BranchId, Route = route });
             }
 
             void AddBar()
             {
-                if (branch != null && !hasRoute) throw new FormatException("Branch notes must follow #N, #E or #M.");
+                if (branch != null && !hasRoute && !warnedCommonInBranch)
+                {
+                    // OpenTaiko: these measures are common, and each route then starts over them.
+                    Warn($"Notes between #BRANCHSTART and its first #N/#E/#M are common and overlap the routes (measure {measure})");
+                    warnedCommonInBranch = true;
+                }
                 var bar = NewNote(); bar.Display = state.Barline; bar.IsBranchStart = branchBar;
                 bar.SuddenShow = bar.SuddenMove = double.PositiveInfinity;
                 chart.Bars.Add(bar);
                 Entries.Add(new ChartEntry(bar, false));
-                if (branch != null && branch.FirstEntries[(int)route] == null) branch.FirstEntries[(int)route] = bar;
+                if (InRoute && branch.FirstEntries[(int)route] == null) branch.FirstEntries[(int)route] = bar;
                 branchBar = false;
                 Track(lastBar, Now);
                 Track(rollEndAfterBar, null);
@@ -382,7 +422,7 @@ namespace OurTaiko
                         state.Bpm = Number(arg);
                         if (!(state.Bpm > 0) || double.IsInfinity(state.Bpm)) throw new FormatException("Invalid BPMCHANGE.");
                         chart.Tempos.Add(new ChartTempo { Time = Now, ResumeTime = Now, Beat = state.Beat, Bpm = state.Bpm,
-                            BranchId = branch == null ? -1 : branch.Id, Route = route });
+                            BranchId = BranchId, Route = route });
                         AddClockPoint();
                         break;
                     // OpenTaiko keeps the two numbers as floats and divides them as floats.
@@ -397,7 +437,7 @@ namespace OurTaiko
                         double start = Now;
                         state.RawMs += delay * 1000;
                         chart.Tempos.Add(new ChartTempo { Time = start, ResumeTime = Now,
-                            Beat = state.Beat, Bpm = state.Bpm, BranchId = branch == null ? -1 : branch.Id, Route = route });
+                            Beat = state.Beat, Bpm = state.Bpm, BranchId = BranchId, Route = route });
                         // The beat clock keeps running through a delay (OpenTaiko dbNowBMScollTime).
                         state.Clock16 += delay * 1000 * state.Bpm / 15000;
                         break;
@@ -411,12 +451,12 @@ namespace OurTaiko
                     case "#E": SelectRoute(BranchRoute.Expert); break;
                     case "#M": SelectRoute(BranchRoute.Master); break;
                     case "#SECTION":
-                        chart.Sections.Add(new ChartSection { Time = Now, BranchId = branch == null ? -1 : branch.Id, Route = route });
+                        chart.Sections.Add(new ChartSection { Time = Now, BranchId = BranchId, Route = route });
                         break;
                     // OpenTaiko: inside a route it holds that route once the branch chooses it;
                     // anywhere else it holds the route being played from its time.
                     case "#LEVELHOLD":
-                        if (branch != null && hasRoute) branch.HoldRoutes[(int)route] = true;
+                        if (InRoute) branch.HoldRoutes[(int)route] = true;
                         else chart.LevelHolds.Add(Now);
                         break;
                     case "#NMSCROLL": case "#BMSCROLL": case "#HBSCROLL": state.Mode = ScrollModeOf(key).Value; break;
@@ -466,30 +506,36 @@ namespace OurTaiko
                     }
                     if (token[0] < '0' || token[0] > '9') throw new NotSupportedException($"Unsupported TJA note: {token}");
                     int type = token[0] - '0';
+                    // OpenTaiko's roll rules (CTja, TaikoJiro compatibility): an 8 ends the open roll of
+                    // the routes being written and is a blank where none is open; a roll head while a
+                    // roll is open is a blank (the 9…9…8 kusudama); any other note ends the open roll
+                    // where it stands and is then placed itself.
                     if (type == 8)
                     {
-                        if (longNote == null) throw new FormatException("Long-note tail has no head.");
-                        longNote.EndTime = Now;
-                        longNote.TailBpm = state.Bpm;
-                        longNote.EndScrollClock = state.Clock16 / 16;
-                        Track(rollEndAfterBar, Now, latest: true);
-                        Entries.Add(new ChartEntry(longNote, true));
-                        longNote = null;
+                        bool closed = false;
+                        foreach (var open in OpenRolls()) { CloseRoll(open, Entries); closed = true; }
+                        if (!closed) Warn($"A stray 8 with no roll to end is treated as a blank (measure {measure})");
                     }
-                    // OpenTaiko: a roll head while a roll is open is a blank (TaikoJiro's 9…9…8 kusudama).
-                    else if (type != 0 && !(longNote != null && type >= 5))
+                    else if (type != 0)
                     {
-                        if (longNote != null) throw new FormatException("Overlapping long notes are not supported.");
+                        bool blank = false;
+                        foreach (var open in OpenRolls())
+                        {
+                            if (type >= 5) { Warn($"A roll head inside a roll is treated as a blank (measure {measure})"); blank = true; }
+                            else { Warn($"An unended roll is ended by a note of type {type} (measure {measure})"); CloseRoll(open, Entries); }
+                        }
+                        if (blank) goto advance;
                         var note = NewNote(); note.Kind = (NoteKind)type;
                         if (note.IsBalloon)
                         {
-                            if (branch != null) note.BalloonHits = NextBalloon((int)route);
+                            if (InRoute) note.BalloonHits = NextBalloon((int)route);
                             else { note.BalloonHits = NextBalloon(0); NextBalloon(1); NextBalloon(2); }
                         }
                         chart.Notes.Add(note);
                         Entries.Add(new ChartEntry(note, false));
-                        if (note.IsLong) longNote = note;
+                        if (note.IsLong) foreach (int r in Routes()) openRoll[r] = note;
                     }
+                    advance:
                     state.RawMs += 15000.0 / state.Bpm * state.Measure * (16.0 / slots);
                     state.Beat += 4.0 * state.Measure / Math.Max(1, slots);
                     state.Clock16 += state.Measure * (16.0 / slots);
@@ -503,6 +549,7 @@ namespace OurTaiko
                     state.Clock16 += state.Measure * 16.0;
                 }
                 chart.Duration = Math.Max(chart.Duration, Now);
+                measure++;
                 pending.Clear();
             }
         }

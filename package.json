@@ -1,6 +1,6 @@
 {
   "name": "org.ourtaiko.tjaparser",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "displayName": "OurTaiko TJA Parser",
   "description": "The TJA parser and chart model OurTaikoPlay plays by, with the canonical form and content hash of each chart block.",
   "unity": "6000.0",

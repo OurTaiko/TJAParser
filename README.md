@@ -30,7 +30,7 @@ dotnet~/                     Unity 忽略的目录：dotnet 工程
 `Packages/manifest.json`：
 
 ```json
-"org.ourtaiko.tjaparser": "https://github.com/OurTaiko/TJAParser.git#v0.1.1"
+"org.ourtaiko.tjaparser": "https://github.com/OurTaiko/TJAParser.git#v0.2.0"
 ```
 
 程序集 `OurTaiko.TjaParser` 自动引用（`autoReferenced`），命名空间仍是 `OurTaiko`，游戏代码不需要改 `using`。游戏锁定 tag；服务器端 CLI 用同一个 tag 构建，哈希口径才一致。
@@ -62,6 +62,16 @@ tjaparser version                             算法版本，如 v1
 ```bash
 cd dotnet~ && dotnet publish tjaparser -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o out
 ```
+
+## 容错（照 OpenTaiko，均记入 `TaikoChart.Warnings`）
+
+- 没有开着的连打时遇到 `8`：当空白。
+- 连打开着时又来连打头 5／6／7／9：当空白（TaikoJiro 的 `9…9…8` 写法）。
+- 连打开着时来了 1–4 普通音符：连打在该处结束，音符照常放入。
+- 到 `#END` 连打还开着：在 `#END` 处结束。
+- 连打状态按路线各存一份：共通段开的连打三条路线各自用自己的 `8` 收尾（收尾时刻不同则保留第一条，并警告）；路线里开的连打可以跨过 `#E`／`#M`／下一个分歧，直到该路线再出现 `8` 或 `#END`。
+- 分歧没写 `#N`：普通路线为空。`#BRANCHSTART` 与第一个路线标记之间的音符算共通段，各路线从分歧起点重叠着写。
+- 仍然报错（`FormatException`）：同一路线写两次、`#N`／`#E`／`#M` 或 `#BRANCHEND` 不在分歧里、小节在分歧边界前缺逗号、BPM／MEASURE 非法。
 
 ## 规范文本与哈希
 
