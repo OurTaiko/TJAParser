@@ -30,7 +30,7 @@ dotnet~/                     Unity 忽略的目录：dotnet 工程
 `Packages/manifest.json`：
 
 ```json
-"org.ourtaiko.tjaparser": "https://github.com/OurTaiko/TJAParser.git#v0.1.0"
+"org.ourtaiko.tjaparser": "https://github.com/OurTaiko/TJAParser.git#v0.1.1"
 ```
 
 程序集 `OurTaiko.TjaParser` 自动引用（`autoReferenced`），命名空间仍是 `OurTaiko`，游戏代码不需要改 `using`。游戏锁定 tag；服务器端 CLI 用同一个 tag 构建，哈希口径才一致。
