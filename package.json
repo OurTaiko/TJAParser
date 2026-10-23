@@ -1,0 +1,11 @@
+{
+  "name": "org.ourtaiko.tjaparser",
+  "version": "0.1.0",
+  "displayName": "OurTaiko TJA Parser",
+  "description": "The TJA parser and chart model OurTaikoPlay plays by, with the canonical form and content hash of each chart block.",
+  "unity": "6000.0",
+  "license": "GPL-3.0-or-later",
+  "author": { "name": "OurTaiko", "url": "https://github.com/OurTaiko" },
+  "repository": { "type": "git", "url": "https://github.com/OurTaiko/TJAParser.git" },
+  "keywords": ["taiko", "tja", "parser"]
+}

@@ -1,0 +1,12 @@
+# dotnet~ is hidden from Unity by its trailing ~, not from git: re-include it ahead of the
+# build-output rules below, since a global `*~` rule would otherwise drop the whole folder.
+!dotnet~/
+!dotnet~/**
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.swp
+.DS_Store
+TestResults/

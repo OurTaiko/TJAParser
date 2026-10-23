@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="OurTaiko.TjaParser.Tests/OurTaiko.TjaParser.Tests.csproj" />
+  <Project Path="OurTaiko.TjaParser/OurTaiko.TjaParser.csproj" />
+  <Project Path="tjaparser/tjaparser.csproj" />
+</Solution>
