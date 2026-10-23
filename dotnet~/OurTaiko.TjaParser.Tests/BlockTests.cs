@@ -6,23 +6,21 @@ namespace OurTaiko.Tests;
 public class BlockTests
 {
     [Fact]
-    public void BlocksAreKeyedByCourseAndSideInSongInfoOrder()
+    public void BlocksAreKeyedByCourseAndSideInFileOrder()
     {
         var blocks = ChartHash.OfFile(Tja.Sample);
-        Assert.Equal(new[] { "Oni/single", "Oni/p1", "Oni/p2", "Edit/single" }, blocks.Select(b => b.Course + "/" + b.Side));
-        Assert.Equal(new[] { 8, 0, 0, 10 }, blocks.Select(b => b.Level));
-        Assert.Equal(Difficulty.Ura, blocks[3].Difficulty);
+        Assert.Equal(new[] { "Oni/single", "Edit/single", "Oni/p1", "Oni/p2" }, blocks.Select(b => b.Course + "/" + b.Side));
+        Assert.Equal(new[] { 8, 10, 0, 0 }, blocks.Select(b => b.Level));
+        Assert.Equal(Difficulty.Ura, blocks[1].Difficulty);
         Assert.All(blocks, b => Assert.False(b.IsBranching));
         Assert.True(ChartHash.OfFile(Tja.Branching)[0].IsBranching);
     }
 
     [Fact]
-    public void ASecondBlockOfTheSameCourseAndSideIsNotListed()
+    public void ASecondBlockOfTheSameCourseAndSideIsAnError()
     {
         string text = Tja.Sample + "COURSE:Oni\n#START\n3333,\n#END\n";
-        var before = Tja.Hashes(Tja.Sample);
-        var after = Tja.Hashes(text);
-        Assert.Equal(before, after);
+        Assert.Throws<FormatException>(() => ChartHash.OfFile(text));
     }
 
     [Fact]
@@ -55,10 +53,10 @@ public class BlockTests
     }
 
     [Fact]
-    public void AnUnknownCourseIsNotABlock()
+    public void AnUnknownCourseIsAnError()
     {
         string text = Tja.Sample + "COURSE:Tower\n#START\n1,\n#END\n";
-        Assert.Equal(4, ChartHash.OfFile(text).Count);
+        Assert.Throws<FormatException>(() => ChartHash.OfFile(text));
     }
 
     [Fact]

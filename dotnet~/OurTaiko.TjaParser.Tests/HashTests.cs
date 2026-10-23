@@ -81,6 +81,59 @@ public class HashTests
         Assert.Equal(before, Tja.Hashes(Tja.Branching.Replace("TITLE:Branch", "TITLE:Other"))["Oni/single"]);
     }
 
+    // The hash is of the chart as played: however BPM, MEASURE and SCROLL are written, the same
+    // note times and the same scrolling speeds are the same chart.
+    [Theory]
+    [InlineData("BPM:150\n", "#BPMCHANGE 120\n")]
+    [InlineData("BPM:150\n", "#BPMCHANGE 100\n#BPMCHANGE 120\n")]
+    [InlineData("BPM:120\n", "#BPMCHANGE 120\n")]
+    public void HowTheOpeningTempoIsWrittenDoesNotChangeTheHash(string header, string opening)
+    {
+        // With a tempo change later in the chart too.
+        Assert.Equal(Hash("BPM:120\n", "", Changing), Hash(header, opening, Changing));
+    }
+
+    [Theory]
+    [InlineData("BPM:240\n", "#MEASURE 8/4\n#SCROLL 0.5\n")]
+    [InlineData("BPM:60\n", "#MEASURE 2/4\n#SCROLL 2\n")]
+    [InlineData("BPM:150\n", "#MEASURE 5/4\n#SCROLL 0.8\n")]
+    [InlineData("BPM:120\n", "#SCROLL 1.0\n#MEASURE 4/4\n")]
+    public void BpmMeasureAndScrollRewritesWithTheSameTimesAndSpeedsHashTheSame(string header, string opening)
+    {
+        Assert.Equal(Hash("BPM:120\n", "", Steady), Hash(header, opening, Steady));
+        // Also mid-chart: a no-op BPM change, or a rewrite of the second measure.
+        Assert.Equal(Hash("BPM:120\n", "", Steady), Hash("BPM:120\n", "", "1020,\n#BPMCHANGE 120\n#GOGOSTART\n3040,\n5008,\n"));
+        Assert.Equal(Hash("BPM:120\n", "", Steady), Hash("BPM:120\n", "", "1020,\n#GOGOSTART\n#BPMCHANGE 240\n#MEASURE 8/4\n#SCROLL 0.5\n3040,\n5008,\n"));
+    }
+
+    [Theory]
+    [InlineData("BPM:150\n", "")]                       // faster notes
+    [InlineData("BPM:150\n", "#BPMCHANGE 121\n")]      // slightly faster
+    [InlineData("BPM:240\n", "#MEASURE 8/4\n")]         // same times, double speed
+    [InlineData("BPM:120\n", "#SCROLL 0.5\n")]          // same times, half speed
+    [InlineData("BPM:120\nOFFSET:-1.5\n", "")]          // the same notes later against the audio
+    [InlineData("BPM:120\n", "1000,\n")]                // an extra measure
+    public void WhatIsPlayedDifferentlyChangesTheHash(string header, string opening)
+    {
+        Assert.NotEqual(Hash("BPM:120\n", "", Steady), Hash(header, opening, Steady));
+    }
+
+    [Fact]
+    public void ByTheBeatClockTheWrittenMeasuresCount()
+    {
+        // BM scrolling moves notes by the beat clock, so MEASURE 8/4 spaces them twice as far
+        // even though their times are the same.
+        string plain = Hash("BPM:120\n", "#BMSCROLL\n", Steady);
+        Assert.Equal(plain, Hash("BPM:150\n", "#BMSCROLL\n#BPMCHANGE 120\n", Steady));
+        Assert.NotEqual(plain, Hash("BPM:240\n", "#BMSCROLL\n#MEASURE 8/4\n", Steady));
+    }
+
+    const string Steady = "1020,\n#GOGOSTART\n3040,\n5008,\n";
+    const string Changing = "1020,\n#GOGOSTART\n3040,\n#BPMCHANGE 180\n5008,\n";
+
+    static string Hash(string header, string opening, string body)
+        => Tja.Hashes(header + "COURSE:Oni\n#START\n" + opening + body + "#END\n")["Oni/single"];
+
     [Fact]
     public void TheCanonicalTextNamesNoTitleOrLevel()
     {

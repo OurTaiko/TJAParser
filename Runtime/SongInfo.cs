@@ -8,26 +8,57 @@ namespace OurTaiko
     // Edit is the Ura course that shares the Oni column.
     public enum Difficulty { Back = -3, Modifier = -2, Neiro = -1, Easy = 0, Normal, Hard, Oni, Ura }
 
-    public sealed class CourseInfo
+    // One #START block of a TJA file, in file order. Every block is one the game can list: an
+    // unsupported COURSE, a repeated difficulty and side, or a #START player other than P1/P2
+    // make SongInfo.Read throw, for the game and the servers alike.
+    public sealed class TjaBlock
     {
+        public int Line;              // 1-based line of the #START
+        public string Course = "";    // COURSE as written ("Oni", "3", "Ura"), passed back to TjaParser.Parse
         public Difficulty Difficulty;
-        public string Course; // The TJA's own COURSE value, passed back to TjaParser.Parse.
-        public string Side;   // The block's side ("single", "p1", "p2"), passed back to TjaParser.Parse with Course.
+        public string Side = "single", Player = ""; // ChartSide.OfStart(Player); Player as after #START, upper-case
+        public string Style = "";     // STYLE in force, as written; reset by each COURSE
         public int Level;
-        public bool IsBranching;
+        public bool IsBranching, HasNotes;
+        // NOTESDESIGNER0–4 credits one course each, else MAKER (the Database's rule).
+        public string Maker = "";
     }
 
-    // Song-select metadata of a TJA file: the header, every block, and every course with a block
-    // the seat plays.
+    // What a TJA file says about itself: the header and every block. Which block a player plays
+    // is the game's choice (OurTaikoPlay SeatBlocks); the servers register Blocks as they are.
     public sealed class SongInfo
     {
-        public string Title = "Untitled", Subtitle = "", Genre = "", Wave = "";
+        // TITLE*/SUBTITLE* as written: "origin" is TITLE/SUBTITLE itself, the other keys are the
+        // locales en, ja, ko, zh, zh_tw. Servers store and return the whole dictionary; a client
+        // picks by language (DisplayTitle / DisplaySubtitle).
+        public readonly Dictionary<string, string> Titles = new Dictionary<string, string>();
+        public readonly Dictionary<string, string> Subtitles = new Dictionary<string, string>();
+        // The language Read was asked for; Title and Subtitle are its display forms.
+        public string Language;
+        public string Title => DisplayTitle(Language);
+        public string Subtitle => DisplaySubtitle(Language);
+        public string Genre = "", Wave = "";
         // MAKER header: the chart author, shown in turn with the subtitle while playing.
         public string Maker = "";
-        public double Bpm = 120, DemoStart;
-        public readonly List<CourseInfo> Courses = new List<CourseInfo>();
-        // The first block of each difficulty on each side, by difficulty and then side (ChartSide.All).
-        public readonly List<CourseInfo> Blocks = new List<CourseInfo>();
+        public double Bpm = 120, DemoStart, Offset;
+        // BGMOVIE and MOVIEOFFSET headers, as written / in seconds.
+        public string Movie = "";
+        public double MovieOffset;
+        // NOTESDESIGNER0–4 by course name (Easy…Edit).
+        public readonly Dictionary<string, string> NotesDesigners = new Dictionary<string, string>();
+        // Every #START block in file order.
+        public readonly List<TjaBlock> Blocks = new List<TjaBlock>();
+
+        // The title in a language: its translation when there is one, else TITLE itself.
+        public string DisplayTitle(string language) => Pick(Titles, language) ?? "Untitled";
+        // The subtitle likewise, without the leading -- or ++ that hides or shows it in song select.
+        public string DisplaySubtitle(string language) => (Pick(Subtitles, language) ?? "").TrimStart('-', '+');
+
+        static string Pick(Dictionary<string, string> texts, string language)
+        {
+            if (language != null && texts.TryGetValue(language, out string text) && !string.IsNullOrWhiteSpace(text)) return text;
+            return texts.TryGetValue("origin", out text) ? text : null;
+        }
 
         // TJA COURSE names of Easy..Ura, as charts, scores and servers spell them.
         public static readonly System.Collections.ObjectModel.ReadOnlyCollection<string> CourseNames =
@@ -45,90 +76,76 @@ namespace OurTaiko
             return null;
         }
 
-        public CourseInfo Course(Difficulty difficulty) => Courses.Find(c => c.Difficulty == difficulty);
-        public bool Has(Difficulty difficulty) => Course(difficulty) != null;
+        // The block of a difficulty on a side, or null.
+        public TjaBlock Block(Difficulty difficulty, string side) => Blocks.Find(b => b.Difficulty == difficulty && b.Side == side);
 
-        // The block a seat ("p1" or "p2") plays on a difficulty (ChartSide); null when it has none.
-        // Unlike Course, any seat may be asked whichever seat the info was read for.
-        public CourseInfo Block(Difficulty difficulty, string seat = "p1")
-        {
-            foreach (string side in ChartSide.Reads(seat))
-            {
-                var block = Blocks.Find(c => c.Difficulty == difficulty && c.Side == side);
-                if (block != null) return block;
-            }
-            return null;
-        }
-
-        public static SongInfo Read(string text, string language = null, string seat = "p1")
+        public static SongInfo Read(string text, string language = null)
         {
             if (string.IsNullOrWhiteSpace(text)) throw new FormatException("The TJA chart is empty.");
-            var info = new SongInfo();
-            var titles = new Dictionary<string, string>();
-            var subtitles = new Dictionary<string, string>();
-            string course = "Oni";
+            var lines = TjaLines.Read(text).ToList();
+            // Whole-file checks first: an unsupported course anywhere stops the read.
+            foreach (var line in lines)
+                if (line.Kind == TjaLineKind.Header && line.Key == "COURSE" && DifficultyOf(line.Value) == null)
+                    throw new FormatException($"Unsupported COURSE '{line.Value}' (line {line.Line}).");
+            var info = new SongInfo { Language = language };
+            string course = "Oni", style = "";
             int level = 0;
-            CourseInfo reading = null;
-            // The first block of each difficulty on each side; the seat then picks the side it plays.
-            foreach (var line in TjaLines.Read(text))
+            TjaBlock block = null;
+            foreach (var line in lines)
             {
                 if (line.Kind == TjaLineKind.Start)
                 {
-                    var difficulty = DifficultyOf(course);
-                    reading = difficulty == null ? null
-                        : new CourseInfo { Difficulty = difficulty.Value, Course = course, Side = ChartSide.OfStart(line.Value), Level = level };
+                    if (line.Value != "" && line.Value != "P1" && line.Value != "P2")
+                        throw new FormatException($"#START takes P1 or P2, not '{line.Value}' (line {line.Line}).");
+                    var difficulty = DifficultyOf(course).Value;
+                    string side = ChartSide.OfStart(line.Value);
+                    var twice = info.Blocks.Find(b => b.Difficulty == difficulty && b.Side == side);
+                    if (twice != null)
+                        throw new FormatException($"{CourseName(difficulty)}/{side} is written twice (lines {twice.Line} and {line.Line}).");
+                    block = new TjaBlock { Line = line.Line, Course = course, Difficulty = difficulty, Side = side, Player = line.Value, Style = style, Level = level };
+                    info.Blocks.Add(block);
                     continue;
                 }
-                if (line.Kind == TjaLineKind.End)
-                {
-                    if (reading != null && !info.Blocks.Exists(c => c.Difficulty == reading.Difficulty && c.Side == reading.Side))
-                        info.Blocks.Add(reading);
-                    reading = null;
-                    continue;
-                }
+                if (line.Kind == TjaLineKind.End) { block = null; continue; }
                 if (line.Kind == TjaLineKind.Body)
                 {
-                    if (reading != null && line.Text.StartsWith("#BRANCHSTART", StringComparison.OrdinalIgnoreCase)) reading.IsBranching = true;
+                    if (line.Text.StartsWith("#BRANCHSTART", StringComparison.OrdinalIgnoreCase)) block.IsBranching = true;
+                    else if (line.Text[0] != '#' && line.Text.Any(char.IsDigit)) block.HasNotes = true;
                     continue;
                 }
                 if (line.Kind != TjaLineKind.Header) continue;
                 string key = line.Key, value = line.Value;
                 switch (key)
                 {
-                    case "TITLE": info.Title = value; titles["en"] = value; break;
-                    case "SUBTITLE": info.Subtitle = value.TrimStart('-', '+'); subtitles["en"] = info.Subtitle; break;
+                    case "TITLE": info.Titles["origin"] = value; break;
+                    case "SUBTITLE": info.Subtitles["origin"] = value; break;
                     case "GENRE": info.Genre = value; break;
                     case "MAKER": info.Maker = value.Trim(); break;
                     case "WAVE": info.Wave = value; break;
+                    case "BGMOVIE": info.Movie = value; break;
+                    case "MOVIEOFFSET": info.MovieOffset = Number(value, 0); break;
                     case "BPM": info.Bpm = Number(value, info.Bpm); break;
+                    case "OFFSET": info.Offset = Number(value, 0); break;
                     case "DEMOSTART": info.DemoStart = Number(value, 0); break;
-                    case "COURSE": course = value; level = 0; break;
+                    case "COURSE": course = value; level = 0; style = ""; break;
                     case "LEVEL": level = (int)Number(value, 0); break;
+                    case "STYLE": style = value; break;
+                    case "NOTESDESIGNER0": case "NOTESDESIGNER1": case "NOTESDESIGNER2": case "NOTESDESIGNER3": case "NOTESDESIGNER4":
+                        info.NotesDesigners[CourseNames[key[key.Length - 1] - '0']] = value.Trim();
+                        break;
                     default:
                         bool subtitle = key.StartsWith("SUBTITLE", StringComparison.Ordinal);
                         string prefix = subtitle ? "SUBTITLE" : "TITLE";
                         if (!key.StartsWith(prefix, StringComparison.Ordinal)) break;
                         string locale = TitleLanguage(key.Substring(prefix.Length));
-                        if (locale != null) (subtitle ? subtitles : titles)[locale] = subtitle ? value.TrimStart('-', '+') : value;
+                        if (locale != null) (subtitle ? info.Subtitles : info.Titles)[locale] = value;
                         break;
                 }
             }
-            if (language != null)
-            {
-                info.Title = Translated(titles, language, info.Title);
-                info.Subtitle = Translated(subtitles, language, info.Subtitle);
-            }
-            info.Blocks.Sort((a, b) => a.Difficulty != b.Difficulty ? a.Difficulty.CompareTo(b.Difficulty)
-                : Array.IndexOf(ChartSide.All, a.Side).CompareTo(Array.IndexOf(ChartSide.All, b.Side)));
-            foreach (var difficulty in info.Blocks.Select(c => c.Difficulty).Distinct())
-                if (info.Block(difficulty, seat) is CourseInfo block) info.Courses.Add(block);
+            foreach (var b in info.Blocks)
+                b.Maker = info.NotesDesigners.TryGetValue(CourseName(b.Difficulty), out string designer) && designer.Length > 0 ? designer : info.Maker;
             return info;
         }
-
-        // Display names: the chosen language's translation, else the chart's original TITLE/SUBTITLE.
-        // Online metadata uses the same rule.
-        internal static string Translated(Dictionary<string, string> values, string language, string original)
-            => values.TryGetValue(language, out string text) && !string.IsNullOrWhiteSpace(text) ? text : original;
 
         static string TitleLanguage(string suffix) => suffix switch
         {

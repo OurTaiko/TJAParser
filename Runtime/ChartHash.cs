@@ -15,6 +15,8 @@ namespace OurTaiko
         public int Level;
         public bool IsBranching;
         public string Hash, Error;
+        // TjaParser's warnings for the block (OpenTaiko tolerances it applied).
+        public readonly List<string> Warnings = new List<string>();
         public bool Ok => Hash != null;
     }
 
@@ -40,21 +42,31 @@ namespace OurTaiko
 
         // Every block the game can list (SongInfo.Blocks: the first block of each difficulty on
         // each side, in that order), each parsed as the game plays it.
-        public static List<ChartBlockHash> OfFile(string text)
+        public static List<ChartBlockHash> OfFile(string text) => OfFile(text, SongInfo.Read(text));
+
+        public static List<ChartBlockHash> OfFile(string text, SongInfo info)
         {
             var result = new List<ChartBlockHash>();
-            foreach (var block in SongInfo.Read(text).Blocks)
-            {
-                var entry = new ChartBlockHash
-                {
-                    Difficulty = block.Difficulty, Course = SongInfo.CourseName(block.Difficulty), Side = block.Side,
-                    Level = block.Level, IsBranching = block.IsBranching,
-                };
-                try { entry.Hash = Of(TjaParser.Parse(text, block.Course, block.Side)); }
-                catch (Exception e) { entry.Error = e.Message; }
-                result.Add(entry);
-            }
+            foreach (var block in info.Blocks) result.Add(OfBlock(text, block));
             return result;
+        }
+
+        // One listed block, parsed as the game plays it.
+        public static ChartBlockHash OfBlock(string text, TjaBlock block)
+        {
+            var entry = new ChartBlockHash
+            {
+                Difficulty = block.Difficulty, Course = SongInfo.CourseName(block.Difficulty), Side = block.Side,
+                Level = block.Level, IsBranching = block.IsBranching,
+            };
+            try
+            {
+                var chart = TjaParser.Parse(text, block.Course, block.Side);
+                entry.Hash = Of(chart);
+                entry.Warnings.AddRange(chart.Warnings);
+            }
+            catch (Exception e) { entry.Error = e.Message; }
+            return entry;
         }
     }
 }

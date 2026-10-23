@@ -6,6 +6,9 @@ using OurTaiko;
 // tjaparser: the content hashes of a TJA file's blocks, for the servers.
 //
 //   tjaparser hash <file|->                       every block's course, side and hash, as JSON
+//   tjaparser inspect <file|->                    the header metadata and every #START block in
+//                                                 file order with its hash, as JSON: what the
+//                                                 servers register a chart from
 //   tjaparser canonical <file|-> [course] [side]  the canonical text one block is hashed over
 //   tjaparser version                             the hash algorithm version
 //
@@ -32,6 +35,41 @@ static int Run(string[] args)
             }).ToList();
             var report = new Report { Version = ChartHash.Version, Prefix = ChartHash.Prefix, Blocks = blocks };
             Console.Out.Write(JsonSerializer.Serialize(report, ReportJson.Default.Report));
+            Console.Out.Write('\n');
+            return 0;
+        }
+        case "inspect":
+        {
+            if (args.Length != 2) return Usage();
+            if (!ReadText(args[1], out string text, out string error)) return Fail(3, error);
+            SongInfo info;
+            try { info = SongInfo.Read(text); }
+            catch (FormatException e) { return Fail(4, e.Message); }
+            var hashes = new Dictionary<(Difficulty, string), ChartBlockHash>();
+            foreach (var h in ChartHash.OfFile(text, info)) hashes[(h.Difficulty, h.Side)] = h;
+            var report = new Inspection
+            {
+                Version = ChartHash.Version, Prefix = ChartHash.Prefix,
+                Titles = info.Titles, Subtitles = info.Subtitles, Genre = info.Genre, Maker = info.Maker,
+                NotesDesigners = info.NotesDesigners,
+                Bpm = info.Bpm, Offset = info.Offset, DemoStart = info.DemoStart,
+                Wave = info.Wave, Movie = info.Movie, MovieOffset = info.MovieOffset,
+                Blocks = info.Blocks.Select(b =>
+                {
+                    var entry = new InspectedBlock
+                    {
+                        Line = b.Line, Course = b.Course, Name = SongInfo.CourseName(b.Difficulty),
+                        Side = b.Side, Player = b.Player, Style = b.Style, Level = b.Level, Branching = b.IsBranching,
+                        HasNotes = b.HasNotes, Maker = b.Maker,
+                    };
+                    if (hashes.TryGetValue((b.Difficulty, b.Side), out var h))
+                    {
+                        entry.Hash = h.Hash; entry.Error = h.Error; entry.Warnings = h.Warnings.Count > 0 ? h.Warnings : null;
+                    }
+                    return entry;
+                }).ToList(),
+            };
+            Console.Out.Write(JsonSerializer.Serialize(report, ReportJson.Default.Inspection));
             Console.Out.Write('\n');
             return 0;
         }
@@ -82,7 +120,7 @@ static int Fail(int code, string message)
 
 static int Usage()
 {
-    Console.Error.WriteLine("usage: tjaparser hash <file|->\n       tjaparser canonical <file|-> [course] [side]\n       tjaparser version");
+    Console.Error.WriteLine("usage: tjaparser hash <file|->\n       tjaparser inspect <file|->\n       tjaparser canonical <file|-> [course] [side]\n       tjaparser version");
     return 2;
 }
 
@@ -103,6 +141,42 @@ sealed class Block
     [JsonPropertyName("error")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Error { get; set; }
 }
 
+sealed class Inspection
+{
+    [JsonPropertyName("version")] public int Version { get; set; }
+    [JsonPropertyName("prefix")] public string Prefix { get; set; }
+    [JsonPropertyName("titles")] public Dictionary<string, string> Titles { get; set; }
+    [JsonPropertyName("subtitles")] public Dictionary<string, string> Subtitles { get; set; }
+    [JsonPropertyName("genre")] public string Genre { get; set; }
+    [JsonPropertyName("maker")] public string Maker { get; set; }
+    [JsonPropertyName("notesDesigners")] public Dictionary<string, string> NotesDesigners { get; set; }
+    [JsonPropertyName("bpm")] public double Bpm { get; set; }
+    [JsonPropertyName("offset")] public double Offset { get; set; }
+    [JsonPropertyName("demoStart")] public double DemoStart { get; set; }
+    [JsonPropertyName("wave")] public string Wave { get; set; }
+    [JsonPropertyName("movie")] public string Movie { get; set; }
+    [JsonPropertyName("movieOffset")] public double MovieOffset { get; set; }
+    [JsonPropertyName("blocks")] public List<InspectedBlock> Blocks { get; set; }
+}
+
+sealed class InspectedBlock
+{
+    [JsonPropertyName("line")] public int Line { get; set; }
+    [JsonPropertyName("course")] public string Course { get; set; }
+    [JsonPropertyName("name")] public string Name { get; set; }
+    [JsonPropertyName("side")] public string Side { get; set; }
+    [JsonPropertyName("player")] public string Player { get; set; }
+    [JsonPropertyName("style")] public string Style { get; set; }
+    [JsonPropertyName("level")] public int Level { get; set; }
+    [JsonPropertyName("branching")] public bool Branching { get; set; }
+    [JsonPropertyName("hasNotes")] public bool HasNotes { get; set; }
+    [JsonPropertyName("maker")] public string Maker { get; set; }
+    [JsonPropertyName("hash")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Hash { get; set; }
+    [JsonPropertyName("error")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Error { get; set; }
+    [JsonPropertyName("warnings")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> Warnings { get; set; }
+}
+
 [JsonSourceGenerationOptions(WriteIndented = false)]
 [JsonSerializable(typeof(Report))]
+[JsonSerializable(typeof(Inspection))]
 partial class ReportJson : JsonSerializerContext { }

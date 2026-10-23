@@ -1,15 +1,20 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 
 namespace OurTaiko
 {
-    // The canonical text of a parsed chart: everything TjaParser read that the game plays by, in a
-    // fixed order and spelling, so two files that play the same give the same text. It leaves out
-    // what only names or labels the chart (TITLE, SUBTITLE, COURSE, LEVEL), the parser's warnings
-    // and the moji frames under the notes (NoteMoji), which are drawn from the notes themselves.
-    // ChartHash hashes this text. Any change to it, or to what TjaParser puts in a TaikoChart,
-    // changes every hash: bump Version and have the servers recompute their stored hashes.
+    // The canonical text of a parsed chart: what is played, in a fixed order and spelling, so two
+    // files that play the same give the same text however their BPM, MEASURE and SCROLL are written.
+    // A note is its kind, its times and how it moves (NoteScroll): in normal scrolling the speed
+    // BPM × SCROLL, in BM/HB scrolling its beat clock and effective SCROLL together with the BPM
+    // timeline the clock runs on. Left out: what only names or labels the chart (TITLE, SUBTITLE,
+    // COURSE, LEVEL), OFFSET (the times are already relative to the audio), the written BPM and
+    // beat positions (they drive beat animations and note text, not the notes), the parser's
+    // warnings and the moji frames. ChartHash hashes this text. Any change to it, or to what
+    // TjaParser puts in a TaikoChart, changes every hash: bump Version and recompute stored hashes.
     public static class ChartCanonical
     {
         public const int Version = 1;
@@ -20,7 +25,7 @@ namespace OurTaiko
             var bars = Index(chart.Bars);
             var sb = new StringBuilder();
             sb.Append("tjaparser-canonical ").Append(Version).Append('\n');
-            Line(sb, "chart", N(chart.Bpm), N(chart.Offset), N(chart.Duration));
+            Line(sb, "chart", N(chart.Duration));
 
             Section(sb, "notes", chart.Notes.Count);
             foreach (var note in chart.Notes) Note(sb, "n", note);
@@ -37,16 +42,20 @@ namespace OurTaiko
 
             Section(sb, "sections", chart.Sections.Count);
             foreach (var s in chart.Sections) Line(sb, "s", N(s.Time), I(s.BranchId), I((int)s.Route));
-            Section(sb, "clocks", chart.ScrollClocks.Count);
-            foreach (var c in chart.ScrollClocks) Line(sb, "c", N(c.Time), N(c.RawMs), N(c.Clock), N(c.Bpm), I(c.BranchId), I((int)c.Route));
             Section(sb, "judgemoves", chart.JudgeMoves.Count);
             foreach (var j in chart.JudgeMoves) Line(sb, "j", N(j.Time), N(j.Duration), N(j.MoveX), N(j.MoveY), N(j.FromX), N(j.FromY));
             Section(sb, "levelholds", chart.LevelHolds.Count);
             foreach (double t in chart.LevelHolds) Line(sb, "l", N(t));
             Section(sb, "gogos", chart.Gogos.Count);
             foreach (var g in chart.Gogos) Line(sb, "g", N(g.Time), B(g.On), I(g.BranchId), I((int)g.Route));
-            Section(sb, "tempos", chart.Tempos.Count);
-            foreach (var t in chart.Tempos) Line(sb, "t", N(t.Time), N(t.Bpm), N(t.Beat), N(t.ResumeTime), I(t.BranchId), I((int)t.Route));
+
+            // The beat clock's BPM timeline matters only where something scrolls by the beat clock.
+            // Points at one time on one route collapse to the last; a point that keeps the BPM of the
+            // previous one on its route changes nothing and goes.
+            bool byClock = chart.Notes.Concat(chart.Bars).Any(n => n.ScrollMode != ScrollMode.Normal);
+            var clocks = byClock ? Timeline(chart.ScrollClocks) : new List<ChartClockPoint>();
+            Section(sb, "clocks", clocks.Count);
+            foreach (var c in clocks) Line(sb, "c", N(c.Time), N(c.Clock), N(c.Bpm), I(c.BranchId), I((int)c.Route));
 
             // The played lists: the common part, then each route of each branch, as entries
             // referring to the notes and bars above (n = head, t = tail, b = bar).
@@ -61,10 +70,35 @@ namespace OurTaiko
             return sb.ToString();
         }
 
+        // A note or bar: kind, times, how it moves, and what it is on.
         static void Note(StringBuilder sb, string tag, ChartNote n)
-            => Line(sb, tag, I((int)n.Kind), N(n.Time), N(n.EndTime), N(n.Beat), N(n.Bpm), N(n.TailBpm),
-                N(n.ScrollX), N(n.ScrollY), I((int)n.ScrollMode), N(n.ScrollClock), N(n.EndScrollClock),
+        {
+            string motion = n.ScrollMode == ScrollMode.Normal
+                // Normal: speed across and down (NoteScroll.Place: ScrollX × BPM, ScrollY × BPM).
+                ? "nm " + N(Speed(n.Bpm, n.ScrollX)) + " " + N(Speed(n.Bpm, n.ScrollY))
+                // BM/HB: the beat clock at head and tail and the SCROLL it moves by (BM forces 1, 0).
+                : (n.ScrollMode == ScrollMode.BMScroll ? "bm " : "hb ") + N(n.ScrollClock) + " " + N(n.EndScrollClock) + " "
+                    + N(n.ScrollMode == ScrollMode.BMScroll ? 1 : n.ScrollX) + " " + N(n.ScrollMode == ScrollMode.BMScroll ? 0 : n.ScrollY);
+            Line(sb, tag, I((int)n.Kind), N(n.Time), N(n.EndTime), motion,
                 N(n.SuddenShow), N(n.SuddenMove), I(n.BalloonHits), I(n.BranchId), I((int)n.Route), B(n.Display), B(n.IsBranchStart));
+        }
+
+        // BPM × SCROLL, rounded so that 120 × 1 and 240 × 0.5 (or 150 × 0.8) read the same.
+        static double Speed(double bpm, double scroll) => Math.Round(bpm * scroll, 9);
+
+        static List<ChartClockPoint> Timeline(List<ChartClockPoint> points)
+        {
+            var kept = new List<ChartClockPoint>(points.Count);
+            foreach (var point in points)
+            {
+                int last = kept.Count - 1;
+                bool sameRoute = last >= 0 && kept[last].BranchId == point.BranchId && kept[last].Route == point.Route;
+                if (sameRoute && kept[last].Time == point.Time) kept[last] = point;
+                else if (sameRoute && kept[last].Bpm == point.Bpm) continue;
+                else kept.Add(point);
+            }
+            return kept;
+        }
 
         static Dictionary<ChartNote, int> Index(List<ChartNote> list)
         {
