@@ -373,7 +373,7 @@ namespace OurTaiko
                 state = branchStart.Copy(); route = selected; hasRoute = true; branchBar = true;
             }
 
-            ChartNote NewNote() => new ChartNote { Time = Now, EndTime = Now,
+            ChartNote NewNote() => new ChartNote { Time = Now, EndTime = Now, RawMs = state.RawMs,
                 Beat = state.Beat, Bpm = state.Bpm, ScrollX = state.ScrollX, ScrollY = state.ScrollY,
                 ScrollMode = state.Mode, ScrollClock = state.Clock16 / 16, EndScrollClock = state.Clock16 / 16,
                 SuddenShow = state.SuddenShow, SuddenMove = state.SuddenMove,

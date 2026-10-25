@@ -7,8 +7,9 @@ using OurTaiko;
 //
 //   tjaparser hash <file|->                       every block's course, side and hash, as JSON
 //   tjaparser inspect <file|->                    the header metadata and every #START block in
-//                                                 file order with its hash, as JSON: what the
-//                                                 servers register a chart from
+//                                                 file order with its hash and its judgeable
+//                                                 notes per route, as JSON: what the servers
+//                                                 register a chart from
 //   tjaparser canonical <file|-> [course] [side]  the canonical text one block is hashed over
 //   tjaparser version                             the hash algorithm version
 //
@@ -65,6 +66,7 @@ static int Run(string[] args)
                     if (hashes.TryGetValue((b.Difficulty, b.Side), out var h))
                     {
                         entry.Hash = h.Hash; entry.Error = h.Error; entry.Warnings = h.Warnings.Count > 0 ? h.Warnings : null;
+                        if (h.Chart != null) entry.Notes = RouteNotes(h.Chart);
                     }
                     return entry;
                 }).ToList(),
@@ -88,6 +90,34 @@ static int Run(string[] args)
         default:
             return Usage();
     }
+}
+
+// The don and ka notes a player hits on each route, in time order: "unbranched" for a block
+// without #BRANCHSTART, else "normal", "expert" and "master", each with the common notes and,
+// in every branch, the route it plays (an omitted #E plays #N, an omitted #M plays #E). Times
+// are RawMs (milliseconds from #START, unrounded), kinds 1–4 as written. The servers compute
+// the difficulty constants' raw values from these (OurTaikoLogs/Fanmade/docs).
+static Dictionary<string, NoteList> RouteNotes(TaikoChart chart)
+{
+    var judgeable = chart.Notes.Where(n => n.Kind >= NoteKind.Don && n.Kind <= NoteKind.BigKa)
+        .Select((note, index) => (note, index)).OrderBy(x => x.note.RawMs).ThenBy(x => x.index)
+        .Select(x => x.note).ToList();
+    NoteList Route(BranchRoute? route)
+    {
+        var list = new NoteList { Ms = new List<double>(), Kinds = new List<int>() };
+        foreach (var note in judgeable)
+        {
+            if (route != null && note.BranchId >= 0 && note.Route != chart.Branches[note.BranchId].ResolveRoute(route.Value)) continue;
+            list.Ms.Add(note.RawMs);
+            list.Kinds.Add((int)note.Kind);
+        }
+        return list;
+    }
+    if (chart.Branches.Count == 0) return new Dictionary<string, NoteList> { ["unbranched"] = Route(null) };
+    return new Dictionary<string, NoteList>
+    {
+        ["normal"] = Route(BranchRoute.Normal), ["expert"] = Route(BranchRoute.Expert), ["master"] = Route(BranchRoute.Master),
+    };
 }
 
 static bool ReadText(string path, out string text, out string error)
@@ -174,6 +204,13 @@ sealed class InspectedBlock
     [JsonPropertyName("hash")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Hash { get; set; }
     [JsonPropertyName("error")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Error { get; set; }
     [JsonPropertyName("warnings")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> Warnings { get; set; }
+    [JsonPropertyName("notes")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, NoteList> Notes { get; set; }
+}
+
+sealed class NoteList
+{
+    [JsonPropertyName("ms")] public List<double> Ms { get; set; }
+    [JsonPropertyName("kinds")] public List<int> Kinds { get; set; }
 }
 
 [JsonSourceGenerationOptions(WriteIndented = false)]

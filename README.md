@@ -43,12 +43,12 @@ cd dotnet~ && dotnet build TJAParser.slnx && dotnet test TJAParser.slnx
 
 ```
 tjaparser hash <file|->                       游戏能列出的块：course、side、level、branching 与哈希（JSON）
-tjaparser inspect <file|->                    头部元数据 + 文件里每个 #START 块 + 已列出块的哈希（JSON），服务器登记谱面用
+tjaparser inspect <file|->                    头部元数据 + 文件里每个 #START 块 + 已列出块的哈希与各路线音符（JSON），服务器登记谱面用
 tjaparser canonical <file|-> [course] [side]  某一块被哈希的规范文本（排查两份谱面为何不同）
 tjaparser version                             算法版本，如 v1
 ```
 
-`inspect` 让两站不再自己解析 TJA。头部：`titles`／`subtitles` 两个字典，键 `origin` 是 `TITLE`／`SUBTITLE` 原样（副标题带 `--`），其余键是语言码 en/ja/ko/zh/zh_tw，值原样——服务器整份存、整份返回，客户端自己按语言挑；另有 `maker`、`genre`、`notesDesigners`、`bpm`、`offset`、`demoStart`、`wave`、`movie`、`movieOffset`。`blocks`：文件顺序，每块 `line`、`course` 原文、`name` 归一后的难度名、`side`、`player`、`style`、`level`、`branching`、`hasNotes`、`maker`，以及 `hash` 或 `error`、`warnings`。
+`inspect` 让两站不再自己解析 TJA。头部：`titles`／`subtitles` 两个字典，键 `origin` 是 `TITLE`／`SUBTITLE` 原样（副标题带 `--`），其余键是语言码 en/ja/ko/zh/zh_tw，值原样——服务器整份存、整份返回，客户端自己按语言挑；另有 `maker`、`genre`、`notesDesigners`、`bpm`、`offset`、`demoStart`、`wave`、`movie`、`movieOffset`。`blocks`：文件顺序，每块 `line`、`course` 原文、`name` 归一后的难度名、`side`、`player`、`style`、`level`、`branching`、`hasNotes`、`maker`，以及 `hash` 或 `error`、`warnings`。能解析的块另有 `notes`：玩家在每条路线上要打的咚／咔（1–4，连打与气球不算）按时间排列，`{"<路线>":{"ms":[…],"kinds":[…]}}`，无分歧的块只有 `unbranched`，分歧块有 `normal`／`expert`／`master`（共通段加上每个分歧在该路线实际演奏的那条，缺 `#E` 用 `#N`、缺 `#M` 用 `#E`，与游戏 `ResolveRoute` 相同）。`ms` 是 `ChartNote.RawMs`：从 `#START` 起的毫秒数，含 `#DELAY`、不含 OFFSET、不取整（`Time` 是取整到毫秒的游玩时刻）。两站用它计算难度定数的原始值（`OurTaikoLogs/Fanmade/docs/2026-10-25-difficulty-constants.md`）；它不进规范文本，哈希不变。
 
 读文件时直接报错（`FormatException`，退出码 4）的情况，游戏与服务器一致：COURSE 不是 Easy/Normal/Hard/Oni/Edit（含 0–4、Ura）——先扫整个文件再解析；同一难度同一侧别写了两次；`#START` 后不是空、P1、P2。留给服务器按返回结果判断的：`level` 不在 1–10、`hasNotes` 为假、STYLE:Double 却无 player。`maker` 按 Database 规则：`NOTESDESIGNERn` 记该难度，否则 `MAKER`。
 

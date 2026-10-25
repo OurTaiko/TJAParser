@@ -15,6 +15,9 @@ namespace OurTaiko
         public int Level;
         public bool IsBranching;
         public string Hash, Error;
+        // The block as TjaParser read it (null when it could not), for callers that read more
+        // from it than the hash.
+        public TaikoChart Chart;
         // TjaParser's warnings for the block (OpenTaiko tolerances it applied).
         public readonly List<string> Warnings = new List<string>();
         public bool Ok => Hash != null;
@@ -63,6 +66,7 @@ namespace OurTaiko
             {
                 var chart = TjaParser.Parse(text, block.Course, block.Side);
                 entry.Hash = Of(chart);
+                entry.Chart = chart;
                 entry.Warnings.AddRange(chart.Warnings);
             }
             catch (Exception e) { entry.Error = e.Message; }

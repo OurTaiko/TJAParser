@@ -18,6 +18,10 @@ namespace OurTaiko
     {
         public NoteKind Kind;
         public double Time, EndTime, Beat, Bpm, ScrollX = 1, ScrollY, TailBpm;
+        // OpenTaiko's dbNowTime at the note: milliseconds from #START, not cut to whole
+        // milliseconds as Time is (#DELAY included, OFFSET not). For analysis of note spacing
+        // (the servers' difficulty constants); play and the content hash use Time.
+        public double RawMs;
         public ScrollMode ScrollMode;
         // OpenTaiko's fBMSCROLLTime in measures of four beats: the beat clock at the note (and at a
         // long note's tail). Written measures advance it whatever the BPM; #DELAY at its BPM.
