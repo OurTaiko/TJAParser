@@ -52,6 +52,8 @@ tjaparser version                             算法版本，如 v1
 
 读文件时直接报错（`FormatException`，退出码 4）的情况，游戏与服务器一致：COURSE 不是 Easy/Normal/Hard/Oni/Edit（含 0–4、Ura）——先扫整个文件再解析；同一难度同一侧别写了两次；`#START` 后不是空、P1、P2。留给服务器按返回结果判断的：`level` 不在 1–10、`hasNotes` 为假、STYLE:Double 却无 player。`maker` 按 Database 规则：`NOTESDESIGNERn` 记该难度，否则 `MAKER`。
 
+注释与换行：`//` 到行尾；`/* … */` 可跨行（OpenTaiko 不支持，本库扩展），行内的块注释留一个空格，未闭合则到文件末尾；两者都不能转义，所以 `TITLE:http://…` 和 OpenTaiko 一样截成 `http:`。CRLF、单独的 CR 与 LF 都算换行。
+
 输入必须是 UTF-8（可带 BOM）；后端先做自己的 UTF-8 规范化再调用。退出码：0 完成（解析失败的块在 JSON 里带 `error`、无 `hash`），2 用法错误，3 读不到输入或不是 UTF-8，4 `canonical` 指定的块不存在或解析失败。
 
 ```json
