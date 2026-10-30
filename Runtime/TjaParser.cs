@@ -57,7 +57,7 @@ namespace OurTaiko
                 {
                     if (!reading) continue;
                     if (line.Text[0] == '#') tokens.Add(line.Text);
-                    else foreach (char c in line.Text.Where(c => !char.IsWhiteSpace(c))) tokens.Add(c.ToString());
+                    else NoteTokens(line.Text, tokens);
                     continue;
                 }
                 if (line.Kind == TjaLineKind.Other)
@@ -126,6 +126,34 @@ namespace OurTaiko
             string key = command.Split(new[] { ' ', '\t' }, 2)[0].ToUpperInvariant();
             return key == "#NMSCROLL" ? ScrollMode.Normal : key == "#BMSCROLL" ? ScrollMode.BMScroll
                 : key == "#HBSCROLL" ? ScrollMode.HBScroll : (ScrollMode?)null;
+        }
+
+        // A note line's tokens: one per character, spaces skipped. `[…]` (not in OpenTaiko) stays
+        // on the note before it, as in `7[10]`, and must close on the same line.
+        static void NoteTokens(string text, List<string> tokens)
+        {
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (char.IsWhiteSpace(c)) continue;
+                if (c != '[') { tokens.Add(c.ToString()); continue; }
+                int close = text.IndexOf(']', i);
+                if (close < 0) throw new FormatException($"Unclosed [ in: {text}");
+                if (i == 0 || tokens[tokens.Count - 1].Length != 1 || tokens[tokens.Count - 1] == ",")
+                    throw new FormatException($"[ without a note before it in: {text}");
+                tokens[tokens.Count - 1] += new string(text.Substring(i, close - i + 1).Where(ch => !char.IsWhiteSpace(ch)).ToArray());
+                i = close;
+            }
+        }
+
+        // An inline balloon count, `7[10]` or `9[10]`: a whole number above zero.
+        static int InlineBalloon(string token)
+        {
+            string count = token.Substring(2, token.Length - 3);
+            if (count.Length == 0 || !count.All(c => c >= '0' && c <= '9')
+                || !int.TryParse(count, NumberStyles.None, CultureInfo.InvariantCulture, out int hits) || hits <= 0)
+                throw new FormatException($"Invalid balloon count: {token}");
+            return hits;
         }
 
         static List<int>[] NewBalloonLists() => new[] { new List<int>(), new List<int>(), new List<int>() };
@@ -506,6 +534,12 @@ namespace OurTaiko
                     }
                     if (token[0] < '0' || token[0] > '9') throw new NotSupportedException($"Unsupported TJA note: {token}");
                     int type = token[0] - '0';
+                    int? inlineHits = null;
+                    if (token.Length > 1)
+                    {
+                        if (type != 7 && type != 9) throw new FormatException($"A balloon count on a note that is not a balloon: {token}");
+                        inlineHits = InlineBalloon(token);
+                    }
                     // OpenTaiko's roll rules (CTja, TaikoJiro compatibility): an 8 ends the open roll of
                     // the routes being written and is a blank where none is open; a roll head while a
                     // roll is open is a blank (the 9…9…8 kusudama); any other note ends the open roll
@@ -530,6 +564,8 @@ namespace OurTaiko
                         {
                             if (InRoute) note.BalloonHits = NextBalloon((int)route);
                             else { note.BalloonHits = NextBalloon(0); NextBalloon(1); NextBalloon(2); }
+                            // An inline count still takes its place in the lists.
+                            if (inlineHits.HasValue) note.BalloonHits = inlineHits.Value;
                         }
                         chart.Notes.Add(note);
                         Entries.Add(new ChartEntry(note, false));
