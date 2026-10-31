@@ -4,11 +4,11 @@ using System.Collections.Generic;
 namespace OurTaiko
 {
     // The text under each note, by the arcade rules (OurTaikoLogs/OurTaikoPlay AGENTS.md, 音符文字).
-    // Frames of notes/moji: ドン ド コ カッ カ ドン(大) カッ(大) 連打ー 連打(大)ー ふうせん ーっ!! くすだま.
+    // Frames of notes/moji: ドン ド コ カッ カ ドン(大) カッ(大) 連打ー 連打(大)ー ふうせん ーっ!! くすだま カドン.
     public static class NoteMoji
     {
         public const int Don = 0, DonShort = 1, Ko = 2, Ka = 3, KaShort = 4, BigDon = 5, BigKa = 6,
-            Roll = 7, BigRoll = 8, Balloon = 9, Tail = 10, Kusudama = 11;
+            Roll = 7, BigRoll = 8, Balloon = 9, Tail = 10, Kusudama = 11, Kadon = 12;
 
         // Gaps in quarter-note beats.
         const double Eighth = 0.5, TwentyFourth = 1.0 / 6, Tolerance = 1e-3;
@@ -90,6 +90,7 @@ namespace OurTaiko
             NoteKind.BigRoll => BigRoll,
             NoteKind.Balloon => Balloon,
             NoteKind.Kusudama => Kusudama,
+            NoteKind.Kadon => Kadon,
             _ => Don,
         };
     }

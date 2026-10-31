@@ -537,8 +537,9 @@ namespace OurTaiko
                         AddBar();
                         addedBar = true;
                     }
-                    if (token[0] < '0' || token[0] > '9') throw new NotSupportedException($"Unsupported TJA note: {token}");
-                    int type = token[0] - '0';
+                    // OpenTaiko's G (Kadon) is the one letter read; upper case only, as in OpenTaiko.
+                    int type = token[0] == 'G' ? (int)NoteKind.Kadon : token[0] - '0';
+                    if (type != (int)NoteKind.Kadon && (token[0] < '0' || token[0] > '9')) throw new NotSupportedException($"Unsupported TJA note: {token}");
                     int? inlineHits = null;
                     if (token.Length > 1)
                     {
@@ -560,7 +561,7 @@ namespace OurTaiko
                         bool blank = false;
                         foreach (var open in OpenRolls())
                         {
-                            if (type >= 5) { Warn($"A roll head inside a roll is treated as a blank (measure {measure})"); blank = true; }
+                            if (type >= 5 && type != (int)NoteKind.Kadon) { Warn($"A roll head inside a roll is treated as a blank (measure {measure})"); blank = true; }
                             else { Warn($"An unended roll is ended by a note of type {type} (measure {measure})"); CloseRoll(open, Entries); }
                         }
                         if (blank) goto advance;

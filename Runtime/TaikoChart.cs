@@ -3,7 +3,8 @@ using System.Collections.Generic;
 
 namespace OurTaiko
 {
-    public enum NoteKind { Don = 1, Ka, BigDon, BigKa, Roll, BigRoll, Balloon = 7, Kusudama = 9 }
+    // Numbered by their TJA character: 1–9, and G (Kadon, OpenTaiko's purple note) read as base 36.
+    public enum NoteKind { Don = 1, Ka, BigDon, BigKa, Roll, BigRoll, Balloon = 7, Kusudama = 9, Kadon = 16 }
     public enum Judgment { None, Good, Ok, Bad, Roll }
     public enum BranchRoute { Normal, Expert, Master }
     // How a note scrolls (OpenTaiko #NMSCROLL / #BMSCROLL / #HBSCROLL): by its own time and BPM, or
@@ -38,13 +39,15 @@ namespace OurTaiko
         public int BranchId = -1;
         public BranchRoute Route;
         public bool Display = true, IsBranchStart;
-        public bool IsLong => (int)Kind >= 5;
+        public bool IsLong => IsDrumroll || IsBalloon;
         public bool IsBalloon => Kind == NoteKind.Balloon || Kind == NoteKind.Kusudama;
         public bool IsKa => Kind == NoteKind.Ka || Kind == NoteKind.BigKa;
         // A 5/6 drumroll: a long note that is not a balloon.
         public bool IsDrumroll => Kind == NoteKind.Roll || Kind == NoteKind.BigRoll;
         // A big don or big ka (3/4).
         public bool IsBigNote => Kind == NoteKind.BigDon || Kind == NoteKind.BigKa;
+        // OpenTaiko's Kadon (G): one don and one ka together, in either order.
+        public bool IsKadon => Kind == NoteKind.Kadon;
     }
 
     // One object of an authored note list in source order. A long note appears
