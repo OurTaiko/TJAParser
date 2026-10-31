@@ -56,7 +56,7 @@ tjaparser version                             算法版本，如 v1
 
 气球打数可以直接写在音符上：`7[10]008,`、`9[10]008,`（OpenTaiko 不支持，本库扩展）。方括号紧跟在 7 或 9 后面，里面只能是大于 0 的整数，可以有空格，不能跨行；写在别的音符上、写错数值或方括号没闭合都会报 `FormatException`。内联打数仍占 BALLOON／BALLOONNOR／BALLOONEXP／BALLOONMAS 列表的一个序号，只是不用那个值，所以给某个气球加上它不会让后面的气球错位。写在 `#N`／`#E`／`#M` 里的只属于该路线，写在共通段的三条路线都用它。哈希只看最终打数，`7[10]` 和 `BALLOON:10` 加 `7` 是同一份谱面。
 
-音符字符：`0`–`9`，以及 OpenTaiko 的 `G`（Kadon，紫色音符，咚和咔各打一下）。`G` 只认大写，与 OpenTaiko 相同；它是普通音符，会结束未闭合的连打，音符文字是新加的第 12 帧 カドン（`NoteMoji.Kadon`，OpenTaiko 用的是 ドン(大)），`NoteKind.Kadon` 的值为 16。其余字母音符仍报 `NotSupportedException`。`inspect` 的 `notes` 仍只含 1–4，不含 `G`。
+音符字符：`0`–`9`，以及 OpenTaiko 的 `F`（Ad-Lib，隐藏的加分音符）和 `G`（Kadon，紫色音符，咚和咔各打一下）。`F` 同样只认大写、会结束未闭合的连打；它不画也没有音符文字（`NoteMoji.None`，-1），音符文字的连段计算跳过它，`NoteKind.AdLib` 的值为 15。`G` 只认大写，与 OpenTaiko 相同；它是普通音符，会结束未闭合的连打，音符文字是新加的第 12 帧 カドン（`NoteMoji.Kadon`，OpenTaiko 用的是 ドン(大)），`NoteKind.Kadon` 的值为 16。其余字母音符仍报 `NotSupportedException`。`inspect` 的 `notes` 仍只含 1–4，不含 `F` 和 `G`。
 
 输入必须是 UTF-8（可带 BOM）；后端先做自己的 UTF-8 规范化再调用。退出码：0 完成（解析失败的块在 JSON 里带 `error`、无 `hash`），2 用法错误，3 读不到输入或不是 UTF-8，4 `canonical` 指定的块不存在或解析失败。
 

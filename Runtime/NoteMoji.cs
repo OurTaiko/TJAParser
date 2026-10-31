@@ -9,6 +9,8 @@ namespace OurTaiko
     {
         public const int Don = 0, DonShort = 1, Ko = 2, Ka = 3, KaShort = 4, BigDon = 5, BigKa = 6,
             Roll = 7, BigRoll = 8, Balloon = 9, Tail = 10, Kusudama = 11, Kadon = 12;
+        // No text: an Ad-Lib is not drawn.
+        public const int None = -1;
 
         // Gaps in quarter-note beats.
         const double Eighth = 0.5, TwentyFourth = 1.0 / 6, Tolerance = 1e-3;
@@ -21,11 +23,14 @@ namespace OurTaiko
         }
 
         // Each list is processed alone, so streams never join the common part and a branch route.
+        // A hidden Ad-Lib has no text and does not break or join the streams around it.
         public static void Assign(List<ChartEntry> entries)
         {
             var notes = new List<ChartNote>();
             foreach (var entry in entries)
-                if (!entry.IsBar && !entry.IsTail) notes.Add(entry.Note);
+                if (entry.IsBar || entry.IsTail) continue;
+                else if (entry.Note.IsAdLib) entry.Note.Moji = None;
+                else notes.Add(entry.Note);
 
             for (int start = 0, end; start < notes.Count; start = end + 1)
             {

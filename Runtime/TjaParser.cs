@@ -565,7 +565,7 @@ namespace OurTaiko
                         bool blank = false;
                         foreach (var open in OpenRolls())
                         {
-                            if (type >= 5 && type != (int)NoteKind.Kadon) { Warn($"A roll head inside a roll is treated as a blank (measure {measure})"); blank = true; }
+                            if (type >= 5 && type <= 9) { Warn($"A roll head inside a roll is treated as a blank (measure {measure})"); blank = true; }
                             else { Warn($"An unended roll is ended by a note of type {type} (measure {measure})"); CloseRoll(open, Entries); }
                         }
                         if (blank) goto advance;
