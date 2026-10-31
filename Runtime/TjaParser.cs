@@ -146,6 +146,9 @@ namespace OurTaiko
             }
         }
 
+        // Each note character's value is its index here; lower case and other symbols are -1.
+        const string Base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
         // An inline balloon count, `7[10]` or `9[10]`: a whole number above zero.
         static int InlineBalloon(string token)
         {
@@ -537,9 +540,10 @@ namespace OurTaiko
                         AddBar();
                         addedBar = true;
                     }
-                    // OpenTaiko's G (Kadon) is the one letter read; upper case only, as in OpenTaiko.
-                    int type = token[0] == 'G' ? (int)NoteKind.Kadon : token[0] - '0';
-                    if (type != (int)NoteKind.Kadon && (token[0] < '0' || token[0] > '9')) throw new NotSupportedException($"Unsupported TJA note: {token}");
+                    // A note character is its NoteKind in base 36 (G is 16), upper case only as in OpenTaiko;
+                    // 0 (blank) and 8 (roll end) are read but make no note.
+                    int type = Base36.IndexOf(token[0]);
+                    if (type != 0 && type != 8 && !Enum.IsDefined(typeof(NoteKind), type)) throw new NotSupportedException($"Unsupported TJA note: {token}");
                     int? inlineHits = null;
                     if (token.Length > 1)
                     {
