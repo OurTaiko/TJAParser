@@ -106,4 +106,17 @@ public class ToleranceTests
         Assert.Throws<FormatException>(() => Parse("#N\n1,\n"));
         Assert.Throws<FormatException>(() => Parse("#BRANCHEND\n"));
     }
+
+    [Theory]
+    [InlineData("#DELAY abc")]
+    [InlineData("#DELAY")]
+    [InlineData("#DELAY Infinity")]
+    [InlineData("#DELAY NaN")]
+    public void AnUnreadableDelayIsDroppedWithAWarning(string delay)
+    {
+        var chart = Parse("11\n" + delay + "\n11,\n");
+        Assert.Equal(new[] { 0, 0.5, 1, 1.5 }, chart.Notes.Select(n => n.Time));
+        Assert.Contains(delay, chart.Warnings);
+        Assert.Equal(ChartHash.Of(Parse("1111,\n")), ChartHash.Of(chart));
+    }
 }

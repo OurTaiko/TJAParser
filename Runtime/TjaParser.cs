@@ -461,7 +461,12 @@ namespace OurTaiko
                         else if (!chart.Warnings.Contains(command)) chart.Warnings.Add(command);
                         break;
                     case "#DELAY":
-                        double delay = Number(arg);
+                        // An unreadable DELAY is dropped with a warning, as SCROLL is.
+                        if (!TjaNumber.TryParse(arg, out double delay) || double.IsNaN(delay) || double.IsInfinity(delay))
+                        {
+                            if (!chart.Warnings.Contains(command)) chart.Warnings.Add(command);
+                            break;
+                        }
                         double start = Now;
                         state.RawMs += delay * 1000;
                         chart.Tempos.Add(new ChartTempo { Time = start, ResumeTime = Now,
