@@ -3,9 +3,9 @@ using System.Collections.Generic;
 
 namespace OurTaiko
 {
-    // Numbered by their TJA character: 1–9, and OpenTaiko's F (Ad-Lib, a hidden bonus note) and
-    // G (Kadon, the purple note) read as base 36.
-    public enum NoteKind { Don = 1, Ka, BigDon, BigKa, Roll, BigRoll, Balloon = 7, Kusudama = 9, AdLib = 15, Kadon = 16 }
+    // Numbered by their TJA character: 1–9, and OpenTaiko's C (mine, a note not to hit), F (Ad-Lib,
+    // a hidden bonus note) and G (Kadon, the purple note) read as base 36.
+    public enum NoteKind { Don = 1, Ka, BigDon, BigKa, Roll, BigRoll, Balloon = 7, Kusudama = 9, Mine = 12, AdLib = 15, Kadon = 16 }
     public enum Judgment { None, Good, Ok, Bad, Roll }
     public enum BranchRoute { Normal, Expert, Master }
     // How a note scrolls (OpenTaiko #NMSCROLL / #BMSCROLL / #HBSCROLL): by its own time and BPM, or
@@ -51,6 +51,8 @@ namespace OurTaiko
         public bool IsKadon => Kind == NoteKind.Kadon;
         // OpenTaiko's Ad-Lib (F): hidden, hit with either colour, and only ever a bonus.
         public bool IsAdLib => Kind == NoteKind.AdLib;
+        // OpenTaiko's mine (C): drawn, hit with either colour, and only ever a penalty.
+        public bool IsMine => Kind == NoteKind.Mine;
     }
 
     // One object of an authored note list in source order. A long note appears

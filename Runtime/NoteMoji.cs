@@ -9,7 +9,7 @@ namespace OurTaiko
     {
         public const int Don = 0, DonShort = 1, Ko = 2, Ka = 3, KaShort = 4, BigDon = 5, BigKa = 6,
             Roll = 7, BigRoll = 8, Balloon = 9, Tail = 10, Kusudama = 11, Kadon = 12;
-        // No text: an Ad-Lib is not drawn.
+        // No text: an Ad-Lib is not drawn, and a mine is drawn bare.
         public const int None = -1;
 
         // Gaps in quarter-note beats.
@@ -23,7 +23,8 @@ namespace OurTaiko
         }
 
         // Each list is processed alone, so streams never join the common part and a branch route.
-        // A hidden Ad-Lib has no text and does not break or join the streams around it.
+        // A hidden Ad-Lib has no text and does not break or join the streams around it. A mine is
+        // drawn, so it takes its place in a stream like any note, but has no text and is not a don.
         public static void Assign(List<ChartEntry> entries)
         {
             var notes = new List<ChartNote>();
@@ -69,6 +70,7 @@ namespace OurTaiko
                 bool full = i == end && (i == start || Gap(notes, i - 1) > TwentyFourth + Tolerance);
                 note.Moji = note.Kind == NoteKind.Don ? (full ? Don : DonShort)
                     : note.Kind == NoteKind.Ka ? (full ? Ka : KaShort)
+                    : note.IsMine ? None
                     : Base(note.Kind);
             }
 

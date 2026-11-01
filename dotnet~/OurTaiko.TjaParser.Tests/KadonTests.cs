@@ -42,10 +42,10 @@ public class KadonTests
         Assert.Throws<NotSupportedException>(() => Parse("1g,\n"));
     }
 
-    // Only letters that are a NoteKind are read: A–E, H and later are not yet.
+    // Only letters that are a NoteKind, and E, are read: A, B, D, H and later are not yet.
     [Theory]
     [InlineData("1A,\n")]
-    [InlineData("1E,\n")]
+    [InlineData("1D,\n")]
     [InlineData("1H,\n")]
     [InlineData("1Z,\n")]
     public void OtherLettersAreNotRead(string body)

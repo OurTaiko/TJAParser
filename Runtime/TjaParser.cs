@@ -148,6 +148,8 @@ namespace OurTaiko
 
         // Each note character's value is its index here; lower case and other symbols are -1.
         const string Base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        // E, which OpenTaiko lists as unused: no note, but read.
+        const int Unused = 14;
 
         // An inline balloon count, `7[10]` or `9[10]`: a whole number above zero.
         static int InlineBalloon(string token)
@@ -541,9 +543,9 @@ namespace OurTaiko
                         addedBar = true;
                     }
                     // A note character is its NoteKind in base 36 (G is 16), upper case only as in OpenTaiko;
-                    // 0 (blank) and 8 (roll end) are read but make no note.
+                    // 0 (blank), 8 (roll end) and E (unused) are read but make no note.
                     int type = Base36.IndexOf(token[0]);
-                    if (type != 0 && type != 8 && !Enum.IsDefined(typeof(NoteKind), type)) throw new NotSupportedException($"Unsupported TJA note: {token}");
+                    if (type != 0 && type != 8 && type != Unused && !Enum.IsDefined(typeof(NoteKind), type)) throw new NotSupportedException($"Unsupported TJA note: {token}");
                     int? inlineHits = null;
                     if (token.Length > 1)
                     {
@@ -568,6 +570,8 @@ namespace OurTaiko
                             if (type >= 5 && type <= 9) { Warn($"A roll head inside a roll is treated as a blank (measure {measure})"); blank = true; }
                             else { Warn($"An unended roll is ended by a note of type {type} (measure {measure})"); CloseRoll(open, Entries); }
                         }
+                        // OpenTaiko's unknown symbol: it ends an open roll as a note would, then is a blank.
+                        if (type == Unused) { Warn($"The unused note E is treated as a blank (measure {measure})"); blank = true; }
                         if (blank) goto advance;
                         var note = NewNote(); note.Kind = (NoteKind)type;
                         if (note.IsBalloon)
