@@ -46,6 +46,7 @@
 | ⬜ | P2-3 | `SongInfo` 与 `TjaParser` 各自解释头部 | `SongInfo.Read`、`TjaParser.Parse` | 抽出共用的头部读取（与 P0-7、P2-2 一起） | 口径一致 | |
 | ⬜ | P2-4 | token 是 `List<string>` | `NoteTokens` / `ChartReader` | struct token，音符不生成字符串，命令 key 只求一次 | 解析阶段无按音符分配 | |
 | ⬜ | P2-5 | `Command` 大 switch，参数解析分散 | `ChartReader.Command` | 按命令拆成小方法，统一「读不出则丢弃并警告」 | 纯重构 | |
+| ⬜ | P2-6 | 规范文本每个字段一个字符串（`N()`、`params string[]`）：Large 每块写规范文本分配约 4 MB，是解析本身的 2 倍（P1 后实测补入） | `ChartCanonical.Write`、`ChartHash.OfCanonical` | 数字用 `TryFormat("R")` 直接写入缓冲；SHA-256 按块增量计算，不整串转 UTF-8 | 规范文本逐字节不变，`OfFile` 分配大幅下降 | |
 
 ## P3：小问题与整洁
 
@@ -71,3 +72,16 @@
 | SongInfoRead | Large | 1,597 µs | 1,877 KB |
 | Parse | Large | 3,843 µs | 3,715 KB |
 | OfFile | Large | 64,091 µs | 49,477 KB |
+
+### P1 完成后（提交 0119b35）
+
+| 方法 | 谱面 | 耗时 | 分配 | 相对基线 |
+|---|---|---:|---:|---|
+| SongInfoRead | Donkama2000 | 194 µs | 401 KB | 分配不变（P1 未涉及） |
+| Parse | Donkama2000 | 188 µs | 316 KB | 耗时 −45%，分配 −36% |
+| OfFile | Donkama2000 | 2,408 µs | 3,381 KB | 耗时 −23%，分配 −24% |
+| SongInfoRead | Large | 1,319 µs | 1,877 KB | 分配不变 |
+| Parse | Large | 2,183 µs | 2,135 KB | 耗时 −43%，分配 −43% |
+| OfFile | Large | 56,391 µs | 40,139 KB | 耗时 −12%，分配 −19% |
+
+`OfFile` 的余量：Large 每块解析约 2 MB、写规范文本约 4 MB、SHA 约 0.35 MB，SongInfo 1.9 MB；规范文本补为 P2-6。
