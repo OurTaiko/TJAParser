@@ -28,6 +28,12 @@ namespace OurTaiko
         // Analyses of earlier versions not yet asked for here: reused if still valid, else read again.
         readonly Dictionary<(string, string), TjaAnalysis> earlier;
         List<TjaDocumentBlock> blocks;
+        // The text's lines and line starts, read once for every block moved into this version.
+        List<TjaLine> lines;
+        TjaSourceText lineStarts;
+
+        List<TjaLine> AllLines => lines ?? (lines = new List<TjaLine>(TjaLines.Read(Text)));
+        TjaSourceText LineStarts => lineStarts ?? (lineStarts = new TjaSourceText(Text));
 
         // How many analyses this version moved from an earlier one, and read afresh.
         internal int Reused, Fresh;
@@ -90,19 +96,20 @@ namespace OurTaiko
             {
                 if (analyses.TryGetValue(key, out var done)) return done;
                 TjaAnalysis analysis = null;
-                if (earlier.TryGetValue(key, out var old)) analysis = Moved(old, Text);
+                if (earlier.TryGetValue(key, out var old)) analysis = Moved(old, Text, AllLines, LineStarts);
                 if (analysis != null) Reused++;
                 else { analysis = TjaParser.Analyze(Text, course, side); Fresh++; }
+                analysis.Share(LineStarts);
                 analyses[key] = analysis;
                 return analysis;
             }
         }
 
         // An earlier analysis moved into `text`, or null when the edit may have changed it. It is
-        // moved only when every line it read that matters to it (every line up to its block's
+        // moved only when every line that matters to it (ReadLines: every line up to its block's
         // end but the other blocks' bodies) is the same in `text`, character for character, and
         // has moved as the edit moves it.
-        internal static TjaAnalysis Moved(TjaAnalysis old, string text)
+        internal static TjaAnalysis Moved(TjaAnalysis old, string text, IReadOnlyList<TjaLine> textLines, TjaSourceText newLines)
         {
             if (old.Chart == null || old.ReadLines == null || old.StartLineIndex < 0) return null;
             string before = old.Text;
@@ -116,6 +123,8 @@ namespace OurTaiko
             // An edit that makes or breaks a comment (a / or * in it or beside it) can change how any
             // later line reads: not reused.
             if (Touches(before, start, oldEnd) || Touches(text, start, newEnd)) return null;
+            // An edit in or next to the block itself: read it again, without looking further.
+            if (start <= old.EndSpan.End && oldEnd >= old.StartSpan.Start) return null;
             // A position moves with the text after the edit; a span's end (just past its last
             // character) at the edit's start stays, so text inserted right after a span is not in it.
             int Move(int offset)
@@ -131,7 +140,6 @@ namespace OurTaiko
                 throw new Unmovable();
             }
             var oldLines = old.Lines;
-            var newLines = new TjaSourceText(text);
 
             // Walk the new text's lines beside the old relevant ones.
             var read = new List<TjaLine>();
@@ -139,13 +147,11 @@ namespace OurTaiko
             bool inBlock = false;
             try
             {
-                foreach (var line in TjaLines.Read(text))
+                foreach (var line in textLines)
                 {
                     if (k == old.ReadLines.Count) break;
-                    // Skip the other blocks' bodies, on both sides.
-                    while (k < old.ReadLines.Count && old.ReadLines[k].Kind == TjaLineKind.Body && !(k > old.StartLineIndex)) k++;
-                    if (line.Kind == TjaLineKind.Body && !inBlock) { read.Add(line); continue; }
-                    if (k == old.ReadLines.Count) return null;
+                    // The other blocks' bodies do not matter (and were not kept).
+                    if (line.Kind == TjaLineKind.Body && !inBlock) continue;
                     var was = old.ReadLines[k];
                     if (was.Kind != line.Kind || was.Implicit != line.Implicit || was.Text != line.Text
                         || !SameLine(before, oldLines, was.Line, text, newLines, line.Line, Move)) return null;
