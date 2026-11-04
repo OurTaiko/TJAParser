@@ -518,46 +518,22 @@ namespace OurTaiko
                 Track(rollEndAfterBar, null);
             }
 
+            // One command. Those that set a number the chart cannot be read without (BPMCHANGE,
+            // MEASURE) or that break the branch structure fail the block; the others, when they do
+            // not read, are dropped with the command as a warning (as OpenTaiko drops them); an
+            // unknown command is warned about by its name.
             void Command(string command)
             {
                 int space = command.IndexOfAny(Blanks);
                 string key = CommandKey(command);
                 string arg = space < 0 ? "" : command.Substring(space + 1).Trim();
+                bool read = true;
                 switch (key)
                 {
-                    case "#BPMCHANGE":
-                        state.Bpm = Number(arg);
-                        if (!(state.Bpm > 0) || double.IsInfinity(state.Bpm)) throw new FormatException("Invalid BPMCHANGE.");
-                        chart.Tempos.Add(new ChartTempo { Time = Now, ResumeTime = Now, Beat = state.Beat, Bpm = state.Bpm,
-                            BranchId = BranchId, Route = route });
-                        AddClockPoint();
-                        break;
-                    // OpenTaiko keeps the two numbers as floats and divides them as floats.
-                    case "#MEASURE":
-                        var parts = arg.Split('/');
-                        if (parts.Length < 2) throw new FormatException($"Invalid MEASURE (a/b): {command}");
-                        state.Measure = (float)Number(parts[0]) / (float)Number(parts[1]);
-                        if (!(state.Measure > 0) || double.IsInfinity(state.Measure)) throw new FormatException("Invalid MEASURE.");
-                        break;
-                    case "#SCROLL":
-                        // An unreadable SCROLL keeps the current one (OpenTaiko drops the command).
-                        if (Scroll(arg, out double scrollX, out double scrollY)) { state.ScrollX = scrollX; state.ScrollY = scrollY; }
-                        else Warn(command);
-                        break;
-                    case "#DELAY":
-                        // An unreadable DELAY is dropped with a warning, as SCROLL is.
-                        if (!TjaNumber.TryParse(arg, out double delay) || double.IsNaN(delay) || double.IsInfinity(delay))
-                        {
-                            Warn(command);
-                            break;
-                        }
-                        double start = Now;
-                        state.RawMs += delay * 1000;
-                        chart.Tempos.Add(new ChartTempo { Time = start, ResumeTime = Now,
-                            Beat = state.Beat, Bpm = state.Bpm, BranchId = BranchId, Route = route });
-                        // The beat clock keeps running through a delay (OpenTaiko dbNowBMScollTime).
-                        state.Clock16 += delay * 1000 * state.Bpm / 15000;
-                        break;
+                    case "#BPMCHANGE": BpmChange(arg); break;
+                    case "#MEASURE": Measure(command, arg); break;
+                    case "#SCROLL": read = Scroll(arg); break;
+                    case "#DELAY": read = Delay(arg); break;
                     case "#GOGOSTART": SetGogo(true); break;
                     case "#GOGOEND": SetGogo(false); break;
                     case "#BARLINEOFF": state.Barline = false; break;
@@ -567,47 +543,89 @@ namespace OurTaiko
                     case "#N": SelectRoute(BranchRoute.Normal); break;
                     case "#E": SelectRoute(BranchRoute.Expert); break;
                     case "#M": SelectRoute(BranchRoute.Master); break;
-                    case "#SECTION":
-                        chart.Sections.Add(new ChartSection { Time = Now, BranchId = BranchId, Route = route });
-                        break;
-                    // OpenTaiko: inside a route it holds that route once the branch chooses it;
-                    // anywhere else it holds the route being played from its time.
-                    case "#LEVELHOLD":
-                        if (InRoute) branch.HoldRoutes[(int)route] = true;
-                        else chart.LevelHolds.Add(Now);
-                        break;
+                    case "#SECTION": chart.Sections.Add(new ChartSection { Time = Now, BranchId = BranchId, Route = route }); break;
+                    case "#LEVELHOLD": LevelHold(); break;
                     case "#NMSCROLL": case "#BMSCROLL": case "#HBSCROLL": state.Mode = ScrollModeOf(key).Value; break;
-                    // OpenTaiko: `#JPOSSCROLL seconds move [direction]`; move is a real (across) or a
-                    // complex number (across and down) in 1280-wide pixels; direction 0 (the default)
-                    // turns it around, as notes move. Moves on every route count.
-                    case "#JPOSSCROLL":
-                        var jpos = arg.Split(Blanks, StringSplitOptions.RemoveEmptyEntries);
-                        int jposDirection = 0;
-                        if (jpos.Length < 2 || !TjaNumber.TryParse(Infinity.Replace(jpos[0], "Infinity"), out double jposSeconds)
-                            || !Scroll(jpos[1], out double jposX, out double jposY)
-                            || jpos.Length >= 3 && !int.TryParse(jpos[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out jposDirection))
-                        {
-                            Warn(command);
-                            break;
-                        }
-                        if (jposDirection == 0) { jposX = -jposX; jposY = -jposY; }
-                        chart.JudgeMoves.Add(new ChartJudgeMove { Time = Now, Duration = Math.Max(0, 1000 * jposSeconds), MoveX = jposX, MoveY = jposY });
-                        break;
-                    // OpenTaiko: `#SUDDEN show move` in seconds, both required. Less than a
-                    // millisecond means unset; the move time is cut to whole milliseconds.
-                    case "#SUDDEN":
-                        var times = arg.Split(Blanks, StringSplitOptions.RemoveEmptyEntries);
-                        if (times.Length < 2 || !TjaNumber.TryParse(times[0], out double show) || !TjaNumber.TryParse(times[1], out double move))
-                        {
-                            Warn(command);
-                            break;
-                        }
-                        state.SuddenShow = Math.Abs(Math.Truncate(show * 1000)) >= 1 ? show : double.PositiveInfinity;
-                        state.SuddenMove = Math.Abs(Math.Truncate(move * 1000)) >= 1 ? Math.Truncate(move * 1000) / 1000 : double.PositiveInfinity;
-                        break;
-                    case "#LANE_ALPHA": LaneAlphaCommand(command, arg); break;
+                    case "#JPOSSCROLL": read = JposScroll(arg); break;
+                    case "#SUDDEN": read = Sudden(arg); break;
+                    case "#LANE_ALPHA": read = LaneAlphaCommand(command, arg); break;
                     default: Warn(key); break;
                 }
+                if (!read) Warn(command);
+            }
+
+            void BpmChange(string arg)
+            {
+                state.Bpm = Number(arg);
+                if (!(state.Bpm > 0) || double.IsInfinity(state.Bpm)) throw new FormatException("Invalid BPMCHANGE.");
+                chart.Tempos.Add(new ChartTempo { Time = Now, ResumeTime = Now, Beat = state.Beat, Bpm = state.Bpm,
+                    BranchId = BranchId, Route = route });
+                AddClockPoint();
+            }
+
+            // OpenTaiko keeps the two numbers as floats and divides them as floats.
+            void Measure(string command, string arg)
+            {
+                var parts = arg.Split('/');
+                if (parts.Length < 2) throw new FormatException($"Invalid MEASURE (a/b): {command}");
+                state.Measure = (float)Number(parts[0]) / (float)Number(parts[1]);
+                if (!(state.Measure > 0) || double.IsInfinity(state.Measure)) throw new FormatException("Invalid MEASURE.");
+            }
+
+            // An unreadable SCROLL keeps the current one (OpenTaiko drops the command).
+            bool Scroll(string arg)
+            {
+                if (!TjaParser.Scroll(arg, out double scrollX, out double scrollY)) return false;
+                state.ScrollX = scrollX; state.ScrollY = scrollY;
+                return true;
+            }
+
+            bool Delay(string arg)
+            {
+                if (!TjaNumber.TryParse(arg, out double delay) || double.IsNaN(delay) || double.IsInfinity(delay)) return false;
+                double start = Now;
+                state.RawMs += delay * 1000;
+                chart.Tempos.Add(new ChartTempo { Time = start, ResumeTime = Now,
+                    Beat = state.Beat, Bpm = state.Bpm, BranchId = BranchId, Route = route });
+                // The beat clock keeps running through a delay (OpenTaiko dbNowBMScollTime).
+                state.Clock16 += delay * 1000 * state.Bpm / 15000;
+                return true;
+            }
+
+            // OpenTaiko: inside a route it holds that route once the branch chooses it; anywhere
+            // else it holds the route being played from its time.
+            void LevelHold()
+            {
+                if (InRoute) branch.HoldRoutes[(int)route] = true;
+                else chart.LevelHolds.Add(Now);
+            }
+
+            // OpenTaiko: `#JPOSSCROLL seconds move [direction]`; move is a real (across) or a
+            // complex number (across and down) in 1280-wide pixels; direction 0 (the default) turns
+            // it around, as notes move. Moves on every route count.
+            bool JposScroll(string arg)
+            {
+                var jpos = arg.Split(Blanks, StringSplitOptions.RemoveEmptyEntries);
+                int direction = 0;
+                if (jpos.Length < 2 || !TjaNumber.TryParse(Infinity.Replace(jpos[0], "Infinity"), out double seconds)
+                    || !TjaParser.Scroll(jpos[1], out double x, out double y)
+                    || jpos.Length >= 3 && !int.TryParse(jpos[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out direction))
+                    return false;
+                if (direction == 0) { x = -x; y = -y; }
+                chart.JudgeMoves.Add(new ChartJudgeMove { Time = Now, Duration = Math.Max(0, 1000 * seconds), MoveX = x, MoveY = y });
+                return true;
+            }
+
+            // OpenTaiko: `#SUDDEN show move` in seconds, both required. Less than a millisecond
+            // means unset; the move time is cut to whole milliseconds.
+            bool Sudden(string arg)
+            {
+                var times = arg.Split(Blanks, StringSplitOptions.RemoveEmptyEntries);
+                if (times.Length < 2 || !TjaNumber.TryParse(times[0], out double show) || !TjaNumber.TryParse(times[1], out double move))
+                    return false;
+                state.SuddenShow = Math.Abs(Math.Truncate(show * 1000)) >= 1 ? show : double.PositiveInfinity;
+                state.SuddenMove = Math.Abs(Math.Truncate(move * 1000)) >= 1 ? Math.Truncate(move * 1000) / 1000 : double.PositiveInfinity;
+                return true;
             }
 
             // OurTaiko (not in OpenTaiko): `#LANE_ALPHA target[%] [ms]`. target is the lane
@@ -615,7 +633,7 @@ namespace OurTaiko
             // from here for that long, or with a negative value fades from that long before up to
             // here. Anything else (missing, unreadable or out-of-range numbers, a third argument)
             // drops the command with a warning, as SCROLL is.
-            void LaneAlphaCommand(string command, string arg)
+            bool LaneAlphaCommand(string command, string arg)
             {
                 var args = arg.Split(Blanks, StringSplitOptions.RemoveEmptyEntries);
                 double ms = 0;
@@ -623,10 +641,7 @@ namespace OurTaiko
                     || !TjaNumber.TryParse(args[0].EndsWith("%") ? args[0].Substring(0, args[0].Length - 1) : args[0], out double percent)
                     || !(percent >= 0 && percent <= 100)
                     || args.Length == 2 && (!TjaNumber.TryParse(args[1], out ms) || double.IsNaN(ms) || double.IsInfinity(ms)))
-                {
-                    Warn(command);
-                    return;
-                }
+                    return false;
                 double fade = Math.Truncate(ms) / 1000;
                 var alpha = new ChartLaneAlpha { Time = Now, StartTime = Math.Min(Now, Now + fade), EndTime = Math.Max(Now, Now + fade),
                     Alpha = percent / 100, BranchId = BranchId, Route = route };
@@ -634,6 +649,7 @@ namespace OurTaiko
                 if (InRoute && alpha.StartTime < branch.DecisionTime)
                     Warn($"#LANE_ALPHA on a route starts before branch {branch.Id} is decided: {command}");
                 chart.LaneAlphas.Add(alpha);
+                return true;
             }
 
             void Flush()

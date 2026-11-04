@@ -45,7 +45,7 @@
 | ✅ | P2-2 | `OfFile` 对每块从头重读，O(块数 × 文件长度) | `ChartHash.OfFile`、`TjaParser.Parse` | 一次读完全部行、切好块，每块带生效的头部上下文；`OfFile` 与 `Parse` 共用 | 多块文件耗时近似线性 | `OfFile` 只读一次行列表，交给 `SongInfo.Read` 与各块的 `Parse`（内部重载，公开 API 不变）；每块仍从头遍历行列表取头部，但不再生成字符串。新测试 `OfFileGivesWhatEachBlockGivesAlone` 证明与逐块 `OfBlock` 一致。OfFile：Donkama 3.38→2.67 MB、Large 40.1→35.2 MB（56→44 ms）；剩余大头是规范文本（P2-6） |
 | ⬜ | P2-3 | `SongInfo` 与 `TjaParser` 各自解释头部 | `SongInfo.Read`、`TjaParser.Parse` | 抽出共用的头部读取（与 P0-7、P2-2 一起） | 口径一致 | |
 | ⬜ | P2-4 | token 是 `List<string>` | `NoteTokens` / `ChartReader` | struct token，音符不生成字符串，命令 key 只求一次 | 解析阶段无按音符分配 | |
-| ⬜ | P2-5 | `Command` 大 switch，参数解析分散 | `ChartReader.Command` | 按命令拆成小方法，统一「读不出则丢弃并警告」 | 纯重构 | |
+| ✅ | P2-5 | `Command` 大 switch，参数解析分散 | `ChartReader.Command` | 按命令拆成小方法，统一「读不出则丢弃并警告」 | 纯重构 | `Command` 只做分发；`BpmChange`、`Measure`、`Scroll`、`Delay`、`LevelHold`、`JposScroll`、`Sudden`、`LaneAlphaCommand` 各成方法，可丢弃的指令返回 false、由 `Command` 统一 `Warn(command)`；golden 不变 |
 | ✅ | P2-6 | 规范文本每个字段一个字符串（`N()`、`params string[]`）：Large 每块写规范文本分配约 4 MB，是解析本身的 2 倍（P1 后实测补入） | `ChartCanonical.Write`、`ChartHash.OfCanonical` | 数字用 `TryFormat("R")` 直接写入缓冲；SHA-256 按块增量计算，不整串转 UTF-8 | 规范文本逐字节不变，`OfFile` 分配大幅下降 | `Writer` 把数字用 `TryFormat` 直接写进 `StringBuilder`（不预设容量，避免大对象堆）；`OfCanonical` 用 `IncrementalHash` 按 8 KB 缓冲编码。golden 的全部哈希不变即规范文本逐字节不变；`CanonicalHashTests` 覆盖跨缓冲的代理对。OfFile：Donkama 2.67→1.79 MB、Large 35.2→18.4 MB（44→34 ms） |
 
 ## P3：小问题与整洁
