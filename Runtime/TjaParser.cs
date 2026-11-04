@@ -132,9 +132,18 @@ namespace OurTaiko
             return true;
         }
 
+        static readonly char[] Blanks = { ' ', '\t' };
+
+        // A command's name, upper case: what stands before its first space or tab.
+        static string CommandKey(string command)
+        {
+            int space = command.IndexOfAny(Blanks);
+            return (space < 0 ? command : command.Substring(0, space)).ToUpperInvariant();
+        }
+
         static ScrollMode? ScrollModeOf(string command)
         {
-            string key = command.Split(new[] { ' ', '\t' }, 2)[0].ToUpperInvariant();
+            string key = CommandKey(command);
             return key == "#NMSCROLL" ? ScrollMode.Normal : key == "#BMSCROLL" ? ScrollMode.BMScroll
                 : key == "#HBSCROLL" ? ScrollMode.HBScroll : (ScrollMode?)null;
         }
@@ -260,9 +269,8 @@ namespace OurTaiko
             {
                 foreach (string token in tokens)
                 {
-                    string key = token.Split(new[] { ' ', '\t' }, 2)[0].ToUpperInvariant();
                     if (token == ",") Flush();
-                    else if (key == "#BRANCHSTART" || key == "#BRANCHEND" || key == "#N" || key == "#E" || key == "#M")
+                    else if (token[0] == '#' && IsBranchCommand(CommandKey(token)))
                     {
                         FlushCommands();
                         Command(token);
@@ -291,6 +299,9 @@ namespace OurTaiko
                 JudgeShift.Link(chart.JudgeMoves);
                 NoteMoji.Assign(chart);
             }
+
+            static bool IsBranchCommand(string key)
+                => key == "#BRANCHSTART" || key == "#BRANCHEND" || key == "#N" || key == "#E" || key == "#M";
 
             void FlushCommands()
             {
@@ -477,8 +488,8 @@ namespace OurTaiko
 
             void Command(string command)
             {
-                int space = command.IndexOfAny(new[] { ' ', '\t' });
-                string key = (space < 0 ? command : command.Substring(0, space)).ToUpperInvariant();
+                int space = command.IndexOfAny(Blanks);
+                string key = CommandKey(command);
                 string arg = space < 0 ? "" : command.Substring(space + 1).Trim();
                 switch (key)
                 {
@@ -538,7 +549,7 @@ namespace OurTaiko
                     // complex number (across and down) in 1280-wide pixels; direction 0 (the default)
                     // turns it around, as notes move. Moves on every route count.
                     case "#JPOSSCROLL":
-                        var jpos = arg.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        var jpos = arg.Split(Blanks, StringSplitOptions.RemoveEmptyEntries);
                         int jposDirection = 0;
                         if (jpos.Length < 2 || !TjaNumber.TryParse(Infinity.Replace(jpos[0], "Infinity"), out double jposSeconds)
                             || !Scroll(jpos[1], out double jposX, out double jposY)
@@ -553,7 +564,7 @@ namespace OurTaiko
                     // OpenTaiko: `#SUDDEN show move` in seconds, both required. Less than a
                     // millisecond means unset; the move time is cut to whole milliseconds.
                     case "#SUDDEN":
-                        var times = arg.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        var times = arg.Split(Blanks, StringSplitOptions.RemoveEmptyEntries);
                         if (times.Length < 2 || !TjaNumber.TryParse(times[0], out double show) || !TjaNumber.TryParse(times[1], out double move))
                         {
                             if (!chart.Warnings.Contains(command)) chart.Warnings.Add(command);
@@ -574,7 +585,7 @@ namespace OurTaiko
             // drops the command with a warning, as SCROLL is.
             void LaneAlphaCommand(string command, string arg)
             {
-                var args = arg.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                var args = arg.Split(Blanks, StringSplitOptions.RemoveEmptyEntries);
                 double ms = 0;
                 if (args.Length < 1 || args.Length > 2
                     || !TjaNumber.TryParse(args[0].EndsWith("%") ? args[0].Substring(0, args[0].Length - 1) : args[0], out double percent)
