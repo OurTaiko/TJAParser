@@ -11,7 +11,8 @@ namespace OurTaiko
         // The block asked for, as in TjaParser.Parse.
         public string Course { get; }
         public string Side { get; }
-        // The chart as parsed; null when an error stopped the block.
+        // The chart as read, errors recovered from (see TjaParser.Analyze); null when there is no
+        // such block, or no text.
         public TaikoChart Chart { get; internal set; }
         public IReadOnlyList<TjaDiagnostic> Diagnostics => diagnostics;
         public bool HasErrors => diagnostics.Exists(d => d.Severity == TjaSeverity.Error);
