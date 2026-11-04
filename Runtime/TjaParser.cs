@@ -238,7 +238,9 @@ namespace OurTaiko
             // number (the one played on every route) and moves every route's place past it.
             readonly List<int>[] balloons;
             readonly int[] balloonIndex = new int[3];
+            // The measure being read: its commands and notes in order, and how many are notes.
             readonly List<string> pending = new List<string>();
+            int pendingNotes;
             TimingState state, branchStart;
             ChartBranch branch;
             readonly bool[] routesSeen = new bool[3];
@@ -287,10 +289,14 @@ namespace OurTaiko
                         FlushCommands();
                         Command(token);
                     }
-                    else pending.Add(token);
+                    else
+                    {
+                        pending.Add(token);
+                        if (token[0] != '#') pendingNotes++;
+                    }
                 }
                 // OpenTaiko reads notes after the last comma as a measure of their own.
-                if (pending.Any(t => t[0] != '#')) { chart.Warnings.Add("Last measure without a comma"); Flush(); }
+                if (pendingNotes > 0) { chart.Warnings.Add("Last measure without a comma"); Flush(); }
                 else FlushCommands();
                 if (branch != null) EndBranch(); // #BRANCHEND is optional before #END / the next branch.
                 // OpenTaiko (TaikoJiro compatibility): #END ends unended rolls.
@@ -317,7 +323,7 @@ namespace OurTaiko
 
             void FlushCommands()
             {
-                if (pending.Any(t => t[0] != '#')) throw new FormatException("A measure is missing its comma before a branch boundary.");
+                if (pendingNotes > 0) throw new FormatException("A measure is missing its comma before a branch boundary.");
                 foreach (string token in pending) Command(token);
                 pending.Clear();
             }
@@ -621,7 +627,7 @@ namespace OurTaiko
 
             void Flush()
             {
-                int slots = pending.Count(t => t[0] != '#'), index = 0;
+                int slots = pendingNotes, index = 0;
                 bool addedBar = false;
                 foreach (string token in pending)
                 {
@@ -690,6 +696,7 @@ namespace OurTaiko
                 chart.Duration = Math.Max(chart.Duration, Now);
                 measure++;
                 pending.Clear();
+                pendingNotes = 0;
             }
         }
     }

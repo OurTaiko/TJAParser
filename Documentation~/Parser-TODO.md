@@ -33,7 +33,7 @@
 | ✅ | P1-3 | 每个 token（含音符）都 `Split` + `ToUpperInvariant` | `ChartReader.Read`、`Command` | 只对 `#` 开头的 token 求 key | `CommandKey` 只用于 `#` 开头的 token；分隔符数组改为静态 `Blanks`；golden 不变 |
 | ✅ | P1-4 | 每个音符字符 `c.ToString()` | `NoteTokens` | 128 项单字符串缓存 | `AsciiStrings` 缓存；内联打数仍拼接成新串，不改缓存；golden 不变 |
 | ✅ | P1-5 | 警告去重 `List.Contains`，O(W²) | `Warn` 及各处 `chart.Warnings.Contains` | 统一走 `Warn`，内部配 `HashSet` | `ChartReader` 内统一走 `Warn`（`HashSet` 以已有警告为初值）；头部 BALLOON 的少量警告仍用 `Contains`；golden 不变 |
-| ⬜ | P1-6 | 每小节 2–3 次 LINQ `Any` / `Count` | `Read`、`FlushCommands`、`Flush` | `pending` 入队时累计音符数 | |
+| ✅ | P1-6 | 每小节 2–3 次 LINQ `Any` / `Count` | `Read`、`FlushCommands`、`Flush` | `pending` 入队时累计音符数 | `pendingNotes` 计数；golden 不变 |
 | ⬜ | P1-7 | 块内每行跑一次 `CourseLine` 正则 | `TjaLines.Read` | 字符比较 | |
 | ⬜ | P1-8 | 6 次 `OrderBy().ToList()` 再拷回 | `ChartReader.Read` 末尾 | 通用稳定插入排序（列表几乎有序） | |
 
