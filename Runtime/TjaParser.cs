@@ -46,21 +46,27 @@ namespace OurTaiko
             var sources = new List<LineSource>();
             var parser = new ChartParser(sources, analysis.diagnostics, analysis.SourceMap, analysis.measures);
             var read = new List<TjaLine>();
-            analysis.Chart = parser.Run(text, Keep(TjaLines.Read(text ?? "", sources), read), requestedCourse, requestedSide);
+            analysis.ReadLines = read;
+            analysis.Chart = parser.Run(text, Keep(TjaLines.Read(text ?? "", sources), parser, analysis), requestedCourse, requestedSide);
             analysis.StartSpan = parser.StartSpan;
             analysis.EndSpan = parser.EndSpan;
-            analysis.ReadLines = read;
-            analysis.StartLineIndex = parser.StartLineIndex;
             return analysis;
         }
 
-        // The lines as they are read, kept (TjaDocument compares them to reuse an analysis).
-        static IEnumerable<TjaLine> Keep(IEnumerable<TjaLine> lines, List<TjaLine> read)
+        // The lines that matter to the block, kept as they are read (TjaDocument compares them to
+        // reuse an analysis): all but the other blocks' bodies. StartLineIndex is the block's
+        // #START among them.
+        static IEnumerable<TjaLine> Keep(IEnumerable<TjaLine> lines, ChartParser parser, TjaAnalysis analysis)
         {
+            var kept = analysis.ReadLines;
+            int index = -1;
             foreach (var line in lines)
             {
-                read.Add(line);
+                index++;
+                bool inBlock = parser.StartLineIndex >= 0;
+                if (line.Kind != TjaLineKind.Body || inBlock) kept.Add(line);
                 yield return line;
+                if (!inBlock && parser.StartLineIndex == index) analysis.StartLineIndex = kept.Count - 1;
             }
         }
 

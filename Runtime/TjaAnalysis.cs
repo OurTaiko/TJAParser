@@ -58,6 +58,12 @@ namespace OurTaiko
         // Lines and columns of Text.
         public TjaSourceText Lines => lines ?? (lines = new TjaSourceText(Text));
 
+        // A document's line table, shared by its blocks' analyses.
+        internal void Share(TjaSourceText table)
+        {
+            if (lines == null) lines = table;
+        }
+
         internal readonly List<TjaDiagnostic> diagnostics = new List<TjaDiagnostic>();
         // The lines read, up to the block's end, and where its #START is among them (TjaDocument).
         internal List<TjaLine> ReadLines;
