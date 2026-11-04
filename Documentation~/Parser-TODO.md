@@ -15,8 +15,8 @@
 
 | 状态 | 编号 | 事项 | 位置 | 做法 | 验收 | 记录 |
 |---|---|---|---|---|---|---|
-| ⬜ | P0-1 | 基准测试工程 | 新建 `dotnet~/OurTaiko.TjaParser.Benchmarks` | BenchmarkDotNet 测 `SongInfo.Read`、`TjaParser.Parse`、`ChartHash.OfFile`；fixture 加大型分歧谱 | 输出耗时与分配字节数，基线记入本文末 | |
-| ⬜ | P0-2 | 差分测试 | 测试工程 | 新旧版本对同一批谱面比较 `hash`、`warnings`、`error`；仓库内用 fixture 与生成谱，两站全量谱库用 CLI `inspect` 输出逐字比对 | 之后每项优化都跑 | |
+| ✅ | P0-1 | 基准测试工程 | 新建 `dotnet~/OurTaiko.TjaParser.Benchmarks` | BenchmarkDotNet 测 `SongInfo.Read`、`TjaParser.Parse`、`ChartHash.OfFile`；fixture 加大型分歧谱 | 输出耗时与分配字节数，基线记入本文末 | `cd dotnet~/OurTaiko.TjaParser.Benchmarks && dotnet run -c Release`；大型谱由 `dotnet~/Corpus/ChartCorpus.cs` 生成 |
+| ✅ | P0-2 | 差分测试 | 测试工程 | 新旧版本对同一批谱面比较 `hash`、`warnings`、`error`；仓库内用 fixture 与生成谱，两站全量谱库用 CLI `inspect` 输出逐字比对 | 之后每项优化都跑 | `GoldenTests`：644 份谱（fixture、生成谱、变异谱）的完整解析结果摘要钉在 `Fixtures/corpus.golden`，有意改变行为时用 `TJA_UPDATE_GOLDEN=1` 重新生成；全量谱库用 `dotnet~/tools/diff-corpus.sh <基线ref> <谱面目录>` |
 | ⬜ | P0-3 | Fuzz 测试 | 测试工程 | 随机输入与随机变异谱面，断言只抛 `FormatException` / `NotSupportedException` | 能复现 P0-4 | |
 | ⬜ | P0-4 | `#MEASURE 4` 抛 `IndexOutOfRangeException` | `TjaParser.cs` `#MEASURE` | 缺 `/` 时抛 `FormatException` 并说明 | 有测试；规范 §14.2 删去 | |
 | ⬜ | P0-5 | CLI `hash` 遇到被拒绝的文件时崩溃（退出码 134） | `Program.cs` `hash` | 与 `inspect` 一样捕获，返回 4 | 有测试；规范 §14.3 删去 | |
@@ -59,4 +59,15 @@
 
 ## 基准记录
 
-（P0-1 完成后填入）
+`dotnet~/OurTaiko.TjaParser.Benchmarks`，.NET 10.0.114，云端容器（噪声较大，看量级与分配即可）。Donkama2000 是真实谱（4 个难度，18 KB）；Large 是生成谱（5 个难度 × 400 小节，含分歧，约 90 KB）。`Parse` 解析文件里最后一块。
+
+### 基线（优化前，提交 e5d8102）
+
+| 方法 | 谱面 | 耗时 | 分配 |
+|---|---|---:|---:|
+| SongInfoRead | Donkama2000 | 249 µs | 401 KB |
+| Parse | Donkama2000 | 344 µs | 494 KB |
+| OfFile | Donkama2000 | 3,135 µs | 4,468 KB |
+| SongInfoRead | Large | 1,597 µs | 1,877 KB |
+| Parse | Large | 3,843 µs | 3,715 KB |
+| OfFile | Large | 64,091 µs | 49,477 KB |
