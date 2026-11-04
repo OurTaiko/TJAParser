@@ -17,6 +17,9 @@ namespace OurTaiko
         public IReadOnlyList<TjaDiagnostic> Diagnostics => diagnostics;
         public bool HasErrors => diagnostics.Exists(d => d.Severity == TjaSeverity.Error);
 
+        // Where each note, bar line and event of Chart is written.
+        public ChartSourceMap SourceMap { get; } = new ChartSourceMap();
+
         TjaSourceText lines;
         // Lines and columns of Text.
         public TjaSourceText Lines => lines ?? (lines = new TjaSourceText(Text));
