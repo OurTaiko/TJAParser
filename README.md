@@ -95,6 +95,10 @@ cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # �
 
 编辑器里文本一直在变，用 `TjaDocument`：`new TjaDocument(text)`，每次修改用 `WithText(text, version)` 或 `WithChange(start, length, text, version)` 得到新快照，`Analyze(course, side)` 按需分析某一块，`Blocks` 列出每个 `#START`。改动没碰到的块（它的行与它之前的每个头部行都没变、只是整体挪动）不重读，而是把上一版的分析移到新位置，结果与重新分析完全相同。分析可在后台线程进行并用 `CancellationToken` 取消；快照之间互不影响，可多线程同时读。`Syntax`（`TjaSyntax.Tokenize`）把全文切成无损的语法 token（空白、换行、注释、头部键与值、指令与参数、各种音符、逗号……），拼起来就是原文，供高亮、折叠与格式化使用。
 
+### 语言服务（LSP）
+
+`dotnet~/OurTaiko.TjaParser.LanguageServer` 是 `tja-language-server`：标准输入输出上的 LSP 服务（增量同步，改动后在后台重读诊断、新改动取消旧的读取），VS Code 客户端在 `Editors~/vscode`（说明见其 README），Monaco 等其它编辑器以同样方式连接。
+
 ## SongInfo 的结构
 
 | 成员 | 内容 |

@@ -1,0 +1,36 @@
+{
+  "name": "tja-ourtaiko",
+  "displayName": "TJA (OurTaiko)",
+  "description": "TJA charts: diagnostics and more from tja-language-server, the OurTaiko parser's language server.",
+  "version": "0.1.0",
+  "publisher": "ourtaiko",
+  "license": "GPL-3.0-or-later",
+  "repository": { "type": "git", "url": "https://github.com/OurTaiko/TJAParser.git" },
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Programming Languages"],
+  "main": "./extension.js",
+  "activationEvents": ["onLanguage:tja"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "tja",
+        "aliases": ["TJA", "tja"],
+        "extensions": [".tja"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "configuration": {
+      "title": "TJA",
+      "properties": {
+        "tja.server.path": {
+          "type": "string",
+          "default": "",
+          "description": "The language server: tja-language-server on PATH when empty; a path to its executable, or to tja-language-server.dll (run with dotnet)."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

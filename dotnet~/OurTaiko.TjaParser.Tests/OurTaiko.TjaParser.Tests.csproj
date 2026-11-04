@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="../OurTaiko.TjaParser/OurTaiko.TjaParser.csproj" />
     <ProjectReference Include="../tjaparser/tjaparser.csproj" />
+    <ProjectReference Include="../OurTaiko.TjaParser.LanguageServer/OurTaiko.TjaParser.LanguageServer.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../Corpus/**/*.cs" LinkBase="Corpus" />

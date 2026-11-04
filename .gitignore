@@ -4,6 +4,8 @@
 !dotnet~/**
 !Documentation~/
 !Documentation~/**
+!Editors~/
+!Editors~/**
 bin/
 obj/
 .vs/
