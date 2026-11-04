@@ -37,15 +37,15 @@ namespace OurTaiko
         internal static TaikoChart Parse(string text, IEnumerable<TjaLine> lines, string requestedCourse, string requestedSide)
             => new ChartParser(null).Run(text, lines, requestedCourse, requestedSide);
 
-        // One block with every problem where it is (TjaAnalysis), for an editor.
-        internal static TjaAnalysis Analyze(string text, string requestedCourse = "Oni", string requestedSide = "single")
+        // One block with every problem where it is (TjaAnalysis), for an editor. Unlike Parse it
+        // does not stop at an error: it notes it, reads on as the error's recovery says, and gives
+        // the chart that comes out. Only an unknown side throws, as in Parse.
+        public static TjaAnalysis Analyze(string text, string requestedCourse = "Oni", string requestedSide = "single")
         {
             var analysis = new TjaAnalysis(text, requestedCourse, requestedSide);
             var sources = new List<LineSource>();
             var parser = new ChartParser(sources, analysis.diagnostics);
-            try { analysis.Chart = parser.Run(text, TjaLines.Read(text ?? "", sources), requestedCourse, requestedSide); }
-            catch (FormatException) { }
-            catch (NotSupportedException) { }
+            analysis.Chart = parser.Run(text, TjaLines.Read(text ?? "", sources), requestedCourse, requestedSide);
             return analysis;
         }
 
@@ -254,23 +254,30 @@ namespace OurTaiko
                 diagnostics?.Add(new TjaDiagnostic(kind, message, args, line, span));
             }
 
-            // An error: the block cannot be played as written. Thrown as TjaParser.Parse always has.
+            // An error: the block cannot be played as written. For play it is thrown, as
+            // TjaParser.Parse always has; an analysis notes it and the caller recovers.
             void Error(TjaDiagnosticKind kind, params object[] args)
             {
                 string message = kind.Message(args);
-                diagnostics?.Add(new TjaDiagnostic(kind, message, args, line, span));
-                if (kind.NotSupported) throw new NotSupportedException(message);
-                throw new FormatException(message);
+                if (diagnostics == null)
+                {
+                    if (kind.NotSupported) throw new NotSupportedException(message);
+                    throw new FormatException(message);
+                }
+                diagnostics.Add(new TjaDiagnostic(kind, message, args, line, span));
             }
 
-            // A number the block needs; one that does not read is an error with the runtime's message.
-            double ReadNumber(string value)
+            // A number the block needs; one that does not read is an error with the runtime's
+            // message (thrown for play; false for an analysis).
+            bool ReadNumber(string value, out double result)
             {
-                try { return Number(value); }
+                if (diagnostics == null) { result = Number(value); return true; }
+                try { result = Number(value); return true; }
                 catch (FormatException e)
                 {
-                    diagnostics?.Add(new TjaDiagnostic(TjaDiagnosticKind.NumberUnreadable, e.Message, new object[] { e.Message }, line, span));
-                    throw;
+                    diagnostics.Add(new TjaDiagnostic(TjaDiagnosticKind.NumberUnreadable, e.Message, new object[] { e.Message }, line, span));
+                    result = 0;
+                    return false;
                 }
             }
 
@@ -287,7 +294,8 @@ namespace OurTaiko
 
             public TaikoChart Run(string text, IEnumerable<TjaLine> lines, string requestedCourse, string requestedSide)
             {
-                if (string.IsNullOrWhiteSpace(text)) Error(TjaDiagnosticKind.EmptyChart);
+                // An analysis of a file without the block has no chart.
+                if (string.IsNullOrWhiteSpace(text)) { Error(TjaDiagnosticKind.EmptyChart); return null; }
                 if (Array.IndexOf(ChartSide.All, requestedSide) < 0) throw new ArgumentException($"Unknown side '{requestedSide}'.", nameof(requestedSide));
                 int endLine = 0;
                 var endSpan = default(TextSpan);
@@ -321,7 +329,8 @@ namespace OurTaiko
                             found = true;
                             chart.Course = Course(course).Split('_')[0];
                             if (level != null) AtHeader(levelLine, levelSource);
-                            chart.Level = level == null ? 0 : (int)ReadNumber(level);
+                            // Recovery: an unreadable LEVEL is 0.
+                            chart.Level = level != null && ReadNumber(level, out double stars) ? (int)stars : 0;
                         }
                         continue;
                     }
@@ -371,23 +380,27 @@ namespace OurTaiko
                 {
                     line = 0; span = default;
                     Error(TjaDiagnosticKind.CourseNotFound, requestedCourse, requestedSide);
+                    return null;
                 }
+                // Recovery: an unreadable BPM or OFFSET keeps the default (120, 0); a BPM that is not
+                // positive and finite is 120.
                 if (bpm != null)
                 {
                     AtHeader(bpmLine, bpmSource);
-                    chart.Bpm = ReadNumber(bpm);
+                    if (ReadNumber(bpm, out double tempo)) chart.Bpm = tempo;
                 }
                 // OpenTaiko keeps OFFSET in whole milliseconds, cut toward zero.
                 if (offset != null)
                 {
                     AtHeader(offsetLine, offsetSource);
-                    chart.Offset = (int)(ReadNumber(offset) * 1000) / 1000.0;
+                    if (ReadNumber(offset, out double seconds)) chart.Offset = (int)(seconds * 1000) / 1000.0;
                 }
                 if (!(chart.Bpm > 0) || double.IsInfinity(chart.Bpm))
                 {
                     if (bpm != null) AtHeader(bpmLine, bpmSource);
                     else { line = 0; span = default; }
                     Error(TjaDiagnosticKind.BpmNotPositive);
+                    chart.Bpm = 120;
                 }
 
                 offsetMs = (long)Math.Round(chart.Offset * 1000);
@@ -425,15 +438,19 @@ namespace OurTaiko
                     }
                     int close = text.IndexOf(']', i);
                     this.line = line.Line;
+                    // Recovery: an unclosed [ drops the rest of its line; a [ after no note drops up to its ].
                     if (close < 0)
                     {
                         if (sources != null) span = sources[index].Span(i, text.Length);
                         Error(TjaDiagnosticKind.UnclosedBracket, text);
+                        break;
                     }
                     if (i == 0 || tokens[tokens.Count - 1].Length != 1 || tokens[tokens.Count - 1] == ",")
                     {
                         if (sources != null) span = sources[index].Span(i, close + 1);
                         Error(TjaDiagnosticKind.BracketWithoutNote, text);
+                        i = close;
+                        continue;
                     }
                     tokens[tokens.Count - 1] += new string(text.Substring(i, close - i + 1).Where(ch => !char.IsWhiteSpace(ch)).ToArray());
                     if (tokenSpans != null) tokenSpans[tokenSpans.Count - 1] = TextSpan.FromBounds(tokenSpans[tokenSpans.Count - 1].Start, sources[index].SourceOffset(close) + 1);
@@ -506,7 +523,13 @@ namespace OurTaiko
 
             void FlushCommands()
             {
-                if (pendingNotes > 0) Error(TjaDiagnosticKind.MissingCommaBeforeBranch);
+                if (pendingNotes > 0)
+                {
+                    // Recovery: the notes before the branch boundary are a measure of their own.
+                    Error(TjaDiagnosticKind.MissingCommaBeforeBranch);
+                    Flush();
+                    return;
+                }
                 for (int i = 0; i < pending.Count; i++)
                 {
                     At(pending[i]);
@@ -645,8 +668,9 @@ namespace OurTaiko
 
             void SelectRoute(BranchRoute selected)
             {
-                if (branch == null) Error(TjaDiagnosticKind.RouteWithoutBranch);
-                if (routesSeen[(int)selected]) Error(TjaDiagnosticKind.DuplicateRoute, selected);
+                // Recovery: a route marker out of a branch, or written twice, is ignored.
+                if (branch == null) { Error(TjaDiagnosticKind.RouteWithoutBranch); return; }
+                if (routesSeen[(int)selected]) { Error(TjaDiagnosticKind.DuplicateRoute, selected); return; }
                 routesSeen[(int)selected] = true;
                 state = branchStart.Copy(); route = selected; hasRoute = true; branchBar = true;
             }
@@ -712,7 +736,7 @@ namespace OurTaiko
                     case "#BARLINEOFF": state.Barline = false; break;
                     case "#BARLINEON": state.Barline = true; break;
                     case "#BRANCHSTART": StartBranch(arg); break;
-                    case "#BRANCHEND": if (branch == null) Error(TjaDiagnosticKind.BranchEndWithoutStart); EndBranch(); break;
+                    case "#BRANCHEND": if (branch == null) Error(TjaDiagnosticKind.BranchEndWithoutStart); else EndBranch(); break;
                     case "#N": SelectRoute(BranchRoute.Normal); break;
                     case "#E": SelectRoute(BranchRoute.Expert); break;
                     case "#M": SelectRoute(BranchRoute.Master); break;
@@ -727,10 +751,12 @@ namespace OurTaiko
                 if (!read) Warn(TjaDiagnosticKind.CommandDropped, command);
             }
 
+            // Recovery: a BPMCHANGE or MEASURE that does not read is dropped.
             void BpmChange(string arg)
             {
-                state.Bpm = ReadNumber(arg);
-                if (!(state.Bpm > 0) || double.IsInfinity(state.Bpm)) Error(TjaDiagnosticKind.InvalidBpmChange);
+                if (!ReadNumber(arg, out double bpm)) return;
+                if (!(bpm > 0) || double.IsInfinity(bpm)) { Error(TjaDiagnosticKind.InvalidBpmChange); return; }
+                state.Bpm = bpm;
                 chart.Tempos.Add(new ChartTempo { Time = Now, ResumeTime = Now, Beat = state.Beat, Bpm = state.Bpm,
                     BranchId = BranchId, Route = route });
                 AddClockPoint();
@@ -740,9 +766,11 @@ namespace OurTaiko
             void Measure(string command, string arg)
             {
                 var parts = arg.Split('/');
-                if (parts.Length < 2) Error(TjaDiagnosticKind.MeasureWithoutSlash, command);
-                state.Measure = (float)ReadNumber(parts[0]) / (float)ReadNumber(parts[1]);
-                if (!(state.Measure > 0) || double.IsInfinity(state.Measure)) Error(TjaDiagnosticKind.InvalidMeasure);
+                if (parts.Length < 2) { Error(TjaDiagnosticKind.MeasureWithoutSlash, command); return; }
+                if (!ReadNumber(parts[0], out double beats) || !ReadNumber(parts[1], out double unit)) return;
+                double length = (float)beats / (float)unit;
+                if (!(length > 0) || double.IsInfinity(length)) { Error(TjaDiagnosticKind.InvalidMeasure); return; }
+                state.Measure = length;
             }
 
             // An unreadable SCROLL keeps the current one (OpenTaiko drops the command).
@@ -843,13 +871,22 @@ namespace OurTaiko
                     // A note character is its NoteKind in base 36 (G is 16), upper case only as in OpenTaiko;
                     // 0 (blank), 8 (roll end) and E (unused) are read but make no note.
                     int type = Base36.IndexOf(token[0]);
-                    if (type != 0 && type != 8 && type != Unused && (type < 0 || !IsNoteKind[type])) Error(TjaDiagnosticKind.UnsupportedNote, token);
+                    // Recovery: a note the parser does not know is a blank; an inline count on a note
+                    // that is not a balloon, or one that does not read, is ignored.
+                    if (type != 0 && type != 8 && type != Unused && (type < 0 || !IsNoteKind[type]))
+                    {
+                        Error(TjaDiagnosticKind.UnsupportedNote, token);
+                        goto advance;
+                    }
                     int? inlineHits = null;
                     if (token.Length > 1)
                     {
                         if (type != 7 && type != 9) Error(TjaDiagnosticKind.CountOnNonBalloon, token);
-                        inlineHits = InlineBalloon(token);
-                        if (inlineHits == null) Error(TjaDiagnosticKind.InvalidBalloonCount, token);
+                        else
+                        {
+                            inlineHits = InlineBalloon(token);
+                            if (inlineHits == null) Error(TjaDiagnosticKind.InvalidBalloonCount, token);
+                        }
                     }
                     // OpenTaiko's roll rules (CTja, TaikoJiro compatibility): an 8 ends the open roll of
                     // the routes being written and is a blank where none is open; a roll head while a
