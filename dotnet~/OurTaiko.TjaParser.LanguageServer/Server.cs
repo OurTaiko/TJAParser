@@ -134,12 +134,20 @@ public sealed partial class Server
         }
     }
 
-    static JsonObject Capabilities() => new()
+    static JsonObject Capabilities()
     {
-        ["positionEncoding"] = "utf-16",
-        // Incremental: each change is the range it replaces.
-        ["textDocumentSync"] = new JsonObject { ["openClose"] = true, ["change"] = 2 },
-    };
+        var capabilities = new JsonObject
+        {
+            ["positionEncoding"] = "utf-16",
+            // Incremental: each change is the range it replaces.
+            ["textDocumentSync"] = new JsonObject { ["openClose"] = true, ["change"] = 2 },
+        };
+        FeatureCapabilities(capabilities);
+        return capabilities;
+    }
+
+    // What the language features add to the capabilities.
+    static partial void FeatureCapabilities(JsonObject capabilities);
 
     // Requests of the language features (later steps add them): `handled` says the method is one.
     partial void Features(string method, JsonObject p, CancellationToken cancel, ref JsonNode result, ref bool handled);
