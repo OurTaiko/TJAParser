@@ -143,7 +143,7 @@ CRLF、单独的 CR、LF 都算一个换行（与 OpenTaiko 相同）。行号�
 - `Blocks` 按文件顺序列出每个 `#START`，带 `Line`、`Course`（原文）、`Difficulty`、`Side`、`Player`、`Style`、`Level`、`IsBranching`、`HasNotes`、`Maker`。
 - `#START` 后只能是空、`P1`、`P2`（不分大小写），否则**文件拒绝**。
 - 同一难度同一侧别出现两次：**文件拒绝** `… is written twice`。
-- `IsBranching`：块内有以 `#BRANCHSTART` 开头的行。`HasNotes`：块内有不以 `#` 开头且含数字的行。
+- `IsBranching`：块内有以 `#BRANCHSTART` 开头的行。`HasNotes`：块内有不以 `#` 开头、且含会产生音符的字符的行（1–7、9、`C`、`F`、`G`；不含 `0`、`8`、`E` 与 `[…]` 里的内联打数）。
 - 星数不在 1–10、`HasNotes` 为假、`STYLE:Double` 却没有 P1/P2 都**不**拒绝，留给服务器判断。
 - 哪个座位玩哪一块（例如 1P 先找 p1 再找 single）是游戏的规则（OurTaikoPlay `SeatBlocks`），不在本库。
 
