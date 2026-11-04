@@ -808,34 +808,58 @@ namespace OurTaiko
                 int space = command.IndexOfAny(Blanks);
                 string key = CommandKey(command);
                 string arg = space < 0 ? "" : command.Substring(space + 1).Trim();
-                bool read = true;
-                switch (key)
-                {
-                    case "#BPMCHANGE": BpmChange(arg); break;
-                    case "#MEASURE": Measure(command, arg); break;
-                    case "#SCROLL": read = Scroll(arg); break;
-                    case "#DELAY": read = Delay(arg); break;
-                    case "#GOGOSTART": SetGogo(true); break;
-                    case "#GOGOEND": SetGogo(false); break;
-                    case "#BARLINEOFF": state.Barline = false; break;
-                    case "#BARLINEON": state.Barline = true; break;
-                    case "#BRANCHSTART": StartBranch(arg); break;
-                    case "#BRANCHEND": if (branch == null) Error(TjaDiagnosticKind.BranchEndWithoutStart); else EndBranch(); break;
-                    case "#N": SelectRoute(BranchRoute.Normal); break;
-                    case "#E": SelectRoute(BranchRoute.Expert); break;
-                    case "#M": SelectRoute(BranchRoute.Master); break;
-                    case "#SECTION": Section(); break;
-                    case "#LEVELHOLD": LevelHold(); break;
-                    case "#NMSCROLL": case "#BMSCROLL": case "#HBSCROLL": state.Mode = ScrollModeOf(key).Value; break;
-                    case "#JPOSSCROLL": read = JposScroll(arg); break;
-                    case "#SUDDEN": read = Sudden(arg); break;
-                    case "#LANE_ALPHA": read = LaneAlphaCommand(command, arg); break;
-                    default: Warn(TjaDiagnosticKind.UnknownCommand, key); break;
-                }
-                if (!read) Warn(TjaDiagnosticKind.CommandDropped, command);
+                if (!Readers.TryGetValue(key, out var read)) Warn(TjaDiagnosticKind.UnknownCommand, key);
+                else if (!read(this, command, arg)) Warn(TjaDiagnosticKind.CommandDropped, command);
             }
 
-            // Recovery: a BPMCHANGE or MEASURE that does not read is dropped.
+            // A command's reader: whether its arguments read (false drops it with a warning).
+            delegate bool Reader(ChartParser parser, string command, string arg);
+
+            // The readers of TjaSchema's commands in a block, by name: the schema is the list of
+            // what is read, and checked against this table when it is first used.
+            static readonly Dictionary<string, Reader> Readers = CheckedReaders(new Dictionary<string, Reader>(StringComparer.Ordinal)
+            {
+                ["#BPMCHANGE"] = (p, c, a) => { p.BpmChange(a); return true; },
+                ["#MEASURE"] = (p, c, a) => { p.Measure(c, a); return true; },
+                ["#SCROLL"] = (p, c, a) => p.Scroll(a),
+                ["#DELAY"] = (p, c, a) => p.Delay(a),
+                ["#GOGOSTART"] = (p, c, a) => { p.SetGogo(true); return true; },
+                ["#GOGOEND"] = (p, c, a) => { p.SetGogo(false); return true; },
+                ["#BARLINEOFF"] = (p, c, a) => { p.state.Barline = false; return true; },
+                ["#BARLINEON"] = (p, c, a) => { p.state.Barline = true; return true; },
+                ["#BRANCHSTART"] = (p, c, a) => { p.StartBranch(a); return true; },
+                ["#BRANCHEND"] = (p, c, a) =>
+                {
+                    if (p.branch == null) p.Error(TjaDiagnosticKind.BranchEndWithoutStart);
+                    else p.EndBranch();
+                    return true;
+                },
+                ["#N"] = (p, c, a) => { p.SelectRoute(BranchRoute.Normal); return true; },
+                ["#E"] = (p, c, a) => { p.SelectRoute(BranchRoute.Expert); return true; },
+                ["#M"] = (p, c, a) => { p.SelectRoute(BranchRoute.Master); return true; },
+                ["#SECTION"] = (p, c, a) => { p.Section(); return true; },
+                ["#LEVELHOLD"] = (p, c, a) => { p.LevelHold(); return true; },
+                ["#NMSCROLL"] = (p, c, a) => { p.state.Mode = ScrollMode.Normal; return true; },
+                ["#BMSCROLL"] = (p, c, a) => { p.state.Mode = ScrollMode.BMScroll; return true; },
+                ["#HBSCROLL"] = (p, c, a) => { p.state.Mode = ScrollMode.HBScroll; return true; },
+                ["#JPOSSCROLL"] = (p, c, a) => p.JposScroll(a),
+                ["#SUDDEN"] = (p, c, a) => p.Sudden(a),
+                ["#LANE_ALPHA"] = (p, c, a) => p.LaneAlphaCommand(c, a),
+            });
+
+            // Every command TjaSchema allows in a block has its reader here, and no other (#END is
+            // a kind of line, read before any command is).
+            static Dictionary<string, Reader> CheckedReaders(Dictionary<string, Reader> readers)
+            {
+                foreach (var keyword in TjaSchema.Commands)
+                    if ((keyword.Scope & TjaScope.Body) != 0 && keyword.Name != "#END" && !readers.ContainsKey(keyword.Name))
+                        throw new InvalidOperationException($"No reader for {keyword.Name}.");
+                foreach (string name in readers.Keys)
+                    if (TjaSchema.Find(name) is not TjaKeyword keyword || (keyword.Scope & TjaScope.Body) == 0)
+                        throw new InvalidOperationException($"{name} is read but not in TjaSchema.");
+                return readers;
+            }
+
             void BpmChange(string arg)
             {
                 if (!ReadNumber(arg, out double bpm)) return;

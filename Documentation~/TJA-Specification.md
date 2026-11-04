@@ -253,6 +253,36 @@ Clock16 += Measure × 16 / n
 
 指令行的第一个空白（空格或 Tab）之前是名字（不分大小写），之后 trim 为参数。未知的指令丢弃并警告（警告文字是大写的指令名，例如 `#FOO`）。参数里的数字规则见 2.3。
 
+下表由 `TjaSchema`（`Runtime/TjaSchema.cs`）生成，测试 `SchemaTests` 保证两者一致；解析器按同一张表分发指令。改表后用 `TJA_UPDATE_SPEC=1 dotnet test --filter SchemaTests` 重新生成。
+
+<!-- schema:commands -->
+| 指令 | 参数 | 写在 | 来源 | 进哈希 | 读不出时 | 见 |
+|---|---|---|---|---|---|---|
+| `#START` | `[P1｜P2]` | 块外 | TJA | 否 | — | 3.2 |
+| `#END` | — | 块内 | TJA | 否 | — | 1.5 |
+| `#BPMCHANGE` | `bpm（BPM）` | 块内 | TJA | 是 | 块解析失败 | 6.1 |
+| `#MEASURE` | `a/b` | 块内 | TJA | 是 | 块解析失败 | 6.2 |
+| `#SCROLL` | `speed` | 块内 | TJA | 是 | 警告并忽略 | 6.3 |
+| `#DELAY` | `seconds（s）` | 块内 | TJA | 是 | 警告并忽略 | 6.4 |
+| `#GOGOSTART` | — | 块内 | TJA | 是 | — | 6.5 |
+| `#GOGOEND` | — | 块内 | TJA | 是 | — | 6.5 |
+| `#BARLINEOFF` | — | 块内 | TJA | 是 | — | 6.6 |
+| `#BARLINEON` | — | 块内 | TJA | 是 | — | 6.6 |
+| `#SECTION` | — | 块内 | TJA | 是 | — | 6.7 |
+| `#BRANCHSTART` | `p｜pp｜jp｜d｜jg｜jb｜r｜rb｜s` `expert` `master` `[l｜m]` | 块内 | TJA | 是 | 警告并忽略 | 8.2 |
+| `#N` | — | 块内 | TJA | 是 | 块解析失败 | 8.1 |
+| `#E` | — | 块内 | TJA | 是 | 块解析失败 | 8.1 |
+| `#M` | — | 块内 | TJA | 是 | 块解析失败 | 8.1 |
+| `#BRANCHEND` | — | 块内 | TJA | 是 | 块解析失败 | 8.1 |
+| `#LEVELHOLD` | — | 块内 | TJA | 是 | — | 6.9 |
+| `#NMSCROLL` | — | 块外或块内 | OpenTaiko | 是 | — | 6.10 |
+| `#BMSCROLL` | — | 块外或块内 | OpenTaiko | 是 | — | 6.10 |
+| `#HBSCROLL` | — | 块外或块内 | OpenTaiko | 是 | — | 6.10 |
+| `#JPOSSCROLL` | `seconds（s）` `move（px）` `[direction]` | 块内 | OpenTaiko | 是 | 警告并忽略 | 6.11 |
+| `#SUDDEN` | `show（s）` `move（s）` | 块内 | OpenTaiko | 是 | 警告并忽略 | 6.12 |
+| `#LANE_ALPHA` | `target（%）` `[ms（ms）]` | 块内 | 本库扩展 | 否 | 警告并忽略 | 6.13 |
+<!-- /schema:commands -->
+
 ### 6.1 `#BPMCHANGE <bpm>`
 
 从此处起 BPM 改为 `bpm`。读不出数，或不是正的有限数：**块解析失败**。记录一个 `ChartTempo` 和一个节拍时钟点。
