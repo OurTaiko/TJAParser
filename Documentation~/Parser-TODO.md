@@ -41,7 +41,7 @@
 
 | 状态 | 编号 | 事项 | 位置 | 做法 | 验收 | 记录 |
 |---|---|---|---|---|---|---|
-| ⬜ | P2-1 | 读行时整文件复制 2–3 次，每行 `ToString` + `Trim` | `TjaLines.Uncommented` | 原文上扫描换行，按需生成子串 | 分配明显下降 | |
+| ✅ | P2-1 | 读行时整文件复制 2–3 次，每行 `ToString` + `Trim` | `TjaLines.Uncommented` | 原文上扫描换行，按需生成子串 | 分配明显下降 | `LineReader` 在原文上找换行，只为保留的内容生成一个已 trim 的子串；`LineReaderTests` 用旧实现作参照，在 2 万份随机文本上逐行一致；SongInfoRead 分配 Donkama −22%（401→313 KB）、Large −22%（1877→1462 KB），剩余主要是每行的字符串与 `SongInfo` 的 `ToList`（留给 P2-2/P2-3）；golden 不变 |
 | ⬜ | P2-2 | `OfFile` 对每块从头重读，O(块数 × 文件长度) | `ChartHash.OfFile`、`TjaParser.Parse` | 一次读完全部行、切好块，每块带生效的头部上下文；`OfFile` 与 `Parse` 共用 | 多块文件耗时近似线性 | |
 | ⬜ | P2-3 | `SongInfo` 与 `TjaParser` 各自解释头部 | `SongInfo.Read`、`TjaParser.Parse` | 抽出共用的头部读取（与 P0-7、P2-2 一起） | 口径一致 | |
 | ⬜ | P2-4 | token 是 `List<string>` | `NoteTokens` / `ChartReader` | struct token，音符不生成字符串，命令 key 只求一次 | 解析阶段无按音符分配 | |

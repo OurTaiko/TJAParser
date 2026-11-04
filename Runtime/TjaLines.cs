@@ -48,10 +48,10 @@ namespace OurTaiko
         {
             bool inBlock = false;
             int number = 0;
-            foreach (var (n, uncommented) in Uncommented(text))
+            var lines = new LineReader(text);
+            while (lines.Next(out string line))
             {
-                number = n;
-                string line = uncommented.Trim();
+                number = lines.Number;
                 if (line.Length == 0) continue;
                 bool start = line.StartsWith("#START", StringComparison.OrdinalIgnoreCase);
                 if (inBlock && (start || IsCourseLine(line)))
@@ -80,44 +80,78 @@ namespace OurTaiko
             if (inBlock) yield return new TjaLine(TjaLineKind.End, "#END", @implicit: true, line: number);
         }
 
-        // The file's lines, numbered from 1, without the BOM and comments. As in OpenTaiko, CRLF
-        // and a lone CR end a line as LF does, and `//` runs to the end of its line. `/* … */`
-        // (not in OpenTaiko) may span lines: within a line it leaves a space, so it still parts a
-        // command from its argument; across lines, what is before it and what is after it stay
-        // on their own lines; unclosed, it runs to the end of the file. Neither can be escaped,
-        // so `TITLE:http://…` ends at `http:`, as in OpenTaiko.
-        static IEnumerable<(int Number, string Text)> Uncommented(string text)
+        // The file's lines, numbered from 1, without the BOM and comments, and trimmed. As in
+        // OpenTaiko, CRLF and a lone CR end a line as LF does, and `//` runs to the end of its line.
+        // `/* … */` (not in OpenTaiko) may span lines: within a line it leaves a space, so it still
+        // parts a command from its argument; across lines, what is before it and what is after it
+        // stay on their own lines; unclosed, it runs to the end of the file. Neither can be
+        // escaped, so `TITLE:http://…` ends at `http:`, as in OpenTaiko. The lines are read from
+        // the text in place: only what is kept of each line becomes a string.
+        sealed class LineReader
         {
-            string[] raws = text.TrimStart('﻿').Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
-            var kept = new StringBuilder();
-            bool inComment = false;
-            for (int n = 0; n < raws.Length; n++)
+            static readonly char[] Breaks = { '\r', '\n' };
+            readonly string text;
+            readonly StringBuilder kept = new StringBuilder();
+            // Where the next line starts; past the end once the last line has been read.
+            int next;
+            bool inComment;
+            public int Number;
+
+            public LineReader(string text)
             {
-                string raw = raws[n];
+                this.text = text;
+                while (next < text.Length && text[next] == '\uFEFF') next++;
+            }
+
+            // The next line; false after the last, which is the (maybe empty) text after the final break.
+            public bool Next(out string line)
+            {
+                line = null;
+                if (next > text.Length) return false;
+                int start = next, end = text.IndexOfAny(Breaks, start);
+                if (end < 0) { end = text.Length; next = text.Length + 1; }
+                else next = end + (text[end] == '\r' && end + 1 < text.Length && text[end + 1] == '\n' ? 2 : 1);
+                Number++;
+                line = Uncomment(start, end);
+                return true;
+            }
+
+            string Uncomment(int start, int end)
+            {
+                // Most lines have no comment: they are cut, trimmed, straight from the text.
+                if (!inComment && text.IndexOf('/', start, end - start) < 0) return Trimmed(start, end);
                 kept.Clear();
-                for (int i = 0; i < raw.Length;)
+                for (int i = start; i < end;)
                 {
                     if (inComment)
                     {
-                        int close = raw.IndexOf("*/", i, StringComparison.Ordinal);
+                        int close = text.IndexOf("*/", i, end - i, StringComparison.Ordinal);
                         if (close < 0) break;
                         inComment = false;
                         kept.Append(' ');
                         i = close + 2;
                         continue;
                     }
-                    int line = raw.IndexOf("//", i, StringComparison.Ordinal);
-                    int block = raw.IndexOf("/*", i, StringComparison.Ordinal);
+                    int line = text.IndexOf("//", i, end - i, StringComparison.Ordinal);
+                    int block = text.IndexOf("/*", i, end - i, StringComparison.Ordinal);
                     if (block < 0 || (line >= 0 && line < block))
                     {
-                        kept.Append(raw, i, (line < 0 ? raw.Length : line) - i);
+                        kept.Append(text, i, (line < 0 ? end : line) - i);
                         break;
                     }
-                    kept.Append(raw, i, block - i);
+                    kept.Append(text, i, block - i);
                     inComment = true;
                     i = block + 2;
                 }
-                yield return (n + 1, kept.ToString());
+                return kept.ToString().Trim();
+            }
+
+            // As string.Trim would give it.
+            string Trimmed(int start, int end)
+            {
+                while (start < end && char.IsWhiteSpace(text[start])) start++;
+                while (end > start && char.IsWhiteSpace(text[end - 1])) end--;
+                return start == end ? "" : text.Substring(start, end - start);
             }
         }
     }
