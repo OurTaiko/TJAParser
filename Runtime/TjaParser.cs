@@ -161,6 +161,15 @@ namespace OurTaiko
         const string Base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         // E, which OpenTaiko lists as unused: no note, but read.
         const int Unused = 14;
+        // Whether a base-36 value is a NoteKind (Enum.IsDefined, without reflection per note).
+        static readonly bool[] IsNoteKind = NoteKinds();
+
+        static bool[] NoteKinds()
+        {
+            var kinds = new bool[Base36.Length];
+            foreach (NoteKind kind in Enum.GetValues(typeof(NoteKind))) kinds[(int)kind] = true;
+            return kinds;
+        }
 
         // An inline balloon count, `7[10]` or `9[10]`: a whole number above zero.
         static int InlineBalloon(string token)
@@ -590,7 +599,7 @@ namespace OurTaiko
                     // A note character is its NoteKind in base 36 (G is 16), upper case only as in OpenTaiko;
                     // 0 (blank), 8 (roll end) and E (unused) are read but make no note.
                     int type = Base36.IndexOf(token[0]);
-                    if (type != 0 && type != 8 && type != Unused && !Enum.IsDefined(typeof(NoteKind), type)) throw new NotSupportedException($"Unsupported TJA note: {token}");
+                    if (type != 0 && type != 8 && type != Unused && (type < 0 || !IsNoteKind[type])) throw new NotSupportedException($"Unsupported TJA note: {token}");
                     int? inlineHits = null;
                     if (token.Length > 1)
                     {
