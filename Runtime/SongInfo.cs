@@ -115,7 +115,7 @@ namespace OurTaiko
                 if (line.Kind == TjaLineKind.Body)
                 {
                     if (line.Text.StartsWith("#BRANCHSTART", StringComparison.OrdinalIgnoreCase)) block.IsBranching = true;
-                    else if (line.Text[0] != '#' && line.Text.Any(char.IsDigit)) block.HasNotes = true;
+                    else if (line.Text[0] != '#' && TjaParser.HasNote(line.Text)) block.HasNotes = true;
                     continue;
                 }
                 if (line.Kind != TjaLineKind.Header) continue;

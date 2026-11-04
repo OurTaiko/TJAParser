@@ -196,6 +196,26 @@ namespace OurTaiko
             return kinds;
         }
 
+        // Whether a note line has a character that makes a note (not 0, 8 or E; not an inline
+        // balloon count): SongInfo's HasNotes.
+        internal static bool HasNote(string line)
+        {
+            for (int i = 0; i < line.Length; i++)
+            {
+                char c = line[i];
+                if (c == '[')
+                {
+                    int close = line.IndexOf(']', i);
+                    if (close < 0) break;
+                    i = close;
+                    continue;
+                }
+                int type = Base36.IndexOf(c);
+                if (type > 0 && type != 8 && type != Unused && IsNoteKind[type]) return true;
+            }
+            return false;
+        }
+
         // An inline balloon count, `7[10]` or `9[10]`: a whole number above zero.
         static int InlineBalloon(string token)
         {

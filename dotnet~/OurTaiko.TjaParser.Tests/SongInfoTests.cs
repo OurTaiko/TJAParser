@@ -38,6 +38,20 @@ public class SongInfoTests
         Assert.Equal("Oni Author", info.NotesDesigners["Oni"]);
     }
 
+    // A block has notes when one of its note lines makes a note: blanks, roll ends, E and inline
+    // balloon counts do not; C, F and G do.
+    [Theory]
+    [InlineData("0000,\n", false)]
+    [InlineData("0080,\n0E00,\n", false)]
+    [InlineData(",\n,\n", false)]
+    [InlineData("0001,\n", true)]
+    [InlineData("G000,\n", true)]
+    [InlineData("C,\n", true)]
+    [InlineData("F,\n", true)]
+    [InlineData("07[10]08,\n", true)]
+    public void HasNotesMeansANoteIsMade(string body, bool hasNotes)
+        => Assert.Equal(hasNotes, Assert.Single(SongInfo.Read("COURSE:Oni\n#START\n" + body + "#END\n").Blocks).HasNotes);
+
     [Theory]
     [InlineData("COURSE:Oni\n#START\n1,\n#END\nCOURSE:Tower\n#START\n1,\n#END\n", "Unsupported COURSE 'Tower' (line 6)")]
     [InlineData("COURSE:Dan\nCOURSE:Oni\n#START\n1,\n#END\n", "Unsupported COURSE 'Dan' (line 2)")]
