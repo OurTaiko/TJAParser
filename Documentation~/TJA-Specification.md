@@ -99,10 +99,10 @@ CRLF、单独的 CR、LF 都算一个换行（与 OpenTaiko 相同）。行号�
 | `TITLE` | 两者 | `SongInfo.Titles["origin"]`；`TaikoChart.Title`。不进哈希 |
 | `TITLEEN` `TITLEJA` `TITLEJP` `TITLEKO` `TITLEZH` `TITLECN` `TITLEZH_CN` `TITLEZH-CN` `TITLETW` `TITLEZH_TW` `TITLEZH-TW` | SongInfo | 译名，键分别归一为 `en` `ja` `ko` `zh` `zh_tw`；其他后缀忽略 |
 | `SUBTITLE`、`SUBTITLE` + 同上后缀 | 两者 | 同上，存入 `Subtitles`。显示时去掉开头的 `-` / `+`（`--` 隐藏、`++` 显示是选曲界面的约定）；`TaikoChart.Subtitle` 已去掉 |
-| `BPM` | 两者 | 实数（见 2.4）。`Parse` 中读不出数会使块解析失败；最终值必须为正且有限，否则块解析失败 `BPM must be positive and finite.`。SongInfo 读不出时保留上一个值（默认 120） |
-| `OFFSET` | 两者 | 秒。`Parse` 按 OpenTaiko 先乘 1000 再向零取整为整毫秒：`(int)(x*1000)/1000`；读不出则块解析失败。正值使谱面提前（见 5.2） |
+| `BPM` | 两者 | 实数（见 2.3）。`Parse` 只读对所选块生效的那个值（块结束前最后写的），它读不出会使块解析失败，别处读不出的不影响；最终值必须为正且有限，否则块解析失败 `BPM must be positive and finite.`。SongInfo 读不出时保留上一个值（默认 120） |
+| `OFFSET` | 两者 | 秒。`Parse` 按 OpenTaiko 先乘 1000 再向零取整为整毫秒：`(int)(x*1000)/1000`；与 BPM 一样，只有生效的值读不出才使块解析失败。正值使谱面提前（见 5.2） |
 | `COURSE` | 两者 | 见第 3 节 |
-| `LEVEL` | 两者 | 星数，`(int)` 截断。不进哈希。**`Parse` 中读不出会使块解析失败**，SongInfo 则当 0（见 14 节） |
+| `LEVEL` | 两者 | 星数，`(int)` 截断。不进哈希。所选块生效的 LEVEL 读不出时 **`Parse` 使块解析失败**，SongInfo 则当 0（见 14 节）；别的难度里的不影响 |
 | `BALLOON` `BALLOONNOR` `BALLOONEXP` `BALLOONMAS` | Parse | 气球打数列表，见 7.1 |
 | `STYLE` | SongInfo | 原文存入 `TjaBlock.Style`；解析器不按它选块 |
 | `GENRE` `WAVE` `BGMOVIE` | SongInfo | 原文 |
@@ -530,5 +530,5 @@ Clock16 += Measure × 16 / n
 
 以下是整理本文时发现、尚未修改的行为，记录于此以免被误当作规范意图：
 
-1. **`LEVEL` 读不出**：`SongInfo` 当 0，而 `TjaParser.Parse` 抛 `FormatException` 使块解析失败；且 `Parse` 读到所选块结束为止的所有 LEVEL，所以**别的难度**里一个读不出的 `LEVEL` 也会让这一块失败。`BPM`、`OFFSET` 同理（`SongInfo` 用默认值）。
+1. **生效的 `LEVEL`、`BPM`、`OFFSET` 读不出**：`SongInfo` 用默认值（0、上一个值、0），而 `TjaParser.Parse` 使该块解析失败。别的难度里读不出的值已不影响所选块。
 2. `README.md` 中「每个难度每个侧别只取文件里第一块」的说法与代码不符：代码对重复的难度与侧别直接拒绝整个文件（3.2）。

@@ -31,4 +31,29 @@ public class ReadingRuleTests
     [Fact]
     public void ADifferentDifficultyIsNotFound()
         => Assert.Throws<FormatException>(() => TjaParser.Parse("BPM:120\nCOURSE:Ura\n#START\n1,\n#END\n", "Oni"));
+
+    // Only the BPM, OFFSET and LEVEL in force for the block played are read.
+    [Theory]
+    [InlineData("COURSE:Easy\nLEVEL:x\n#START\n2,\n#END\nCOURSE:Oni\nLEVEL:9\n")]
+    [InlineData("COURSE:Easy\nBPM:x\n#START\n2,\n#END\nCOURSE:Oni\nBPM:150\nLEVEL:9\n")]
+    [InlineData("OFFSET:x\nCOURSE:Oni\nOFFSET:-1\nLEVEL:9\n")]
+    public void AnUnreadableValueThatIsNotInForceDoesNotFailTheBlock(string headers)
+    {
+        var chart = TjaParser.Parse("BPM:150\nOFFSET:-1\n" + headers + "#START\n1,\n#END\n");
+        Assert.Equal(9, chart.Level);
+        Assert.Equal(150, chart.Bpm);
+        Assert.Equal(-1, chart.Offset);
+    }
+
+    [Theory]
+    [InlineData("LEVEL:x\n")]
+    [InlineData("BPM:x\n")]
+    [InlineData("OFFSET:x\n")]
+    [InlineData("LEVEL:\n")]
+    public void AnUnreadableValueInForceStillFailsTheBlock(string header)
+        => Assert.Throws<FormatException>(() => TjaParser.Parse("BPM:120\nCOURSE:Oni\n" + header + "#START\n1,\n#END\n"));
+
+    [Fact]
+    public void AnotherCoursesLevelIsNotInForce()
+        => Assert.Equal(0, TjaParser.Parse("BPM:120\nCOURSE:Easy\nLEVEL:3\nCOURSE:Oni\n#START\n1,\n#END\n").Level);
 }
