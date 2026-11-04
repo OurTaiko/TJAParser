@@ -480,6 +480,8 @@ namespace OurTaiko
                     else if (token[0] == '#' && IsBranchCommand(CommandKey(token)))
                     {
                         FlushCommands();
+                        // The commands before it moved the position; the branch command is here.
+                        At(t);
                         Command(token);
                     }
                     else
