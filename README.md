@@ -62,7 +62,7 @@ tjaparser version                             算法版本，如 v1
 
 完整语法规范（含 `#LANE_ALPHA` 的游戏接入要求）见 [`Documentation~/TJA-Specification.md`](Documentation~/TJA-Specification.md)。
 
-输入必须是 UTF-8（可带 BOM）；后端先做自己的 UTF-8 规范化再调用。退出码：0 完成（解析失败的块在 JSON 里带 `error`、无 `hash`），2 用法错误，3 读不到输入或不是 UTF-8，4 `canonical` 指定的块不存在或解析失败。
+输入必须是 UTF-8（可带 BOM）；后端先做自己的 UTF-8 规范化再调用。退出码：0 完成（解析失败的块在 JSON 里带 `error`、无 `hash`），2 用法错误，3 读不到输入或不是 UTF-8，4 文件被拒绝（`hash`、`inspect`）或 `canonical` 指定的块不存在或解析失败。
 
 ```json
 {"version":1,"prefix":"v1:","blocks":[

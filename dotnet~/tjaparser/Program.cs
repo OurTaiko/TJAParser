@@ -15,7 +15,8 @@ using OurTaiko;
 //
 // The file must be UTF-8 (a BOM is fine); the servers hand over their normalised copy.
 // Exit codes: 0 done (blocks that failed to parse carry an error in the JSON), 2 usage,
-// 3 the input could not be read, 4 the block asked for is not there or did not parse.
+// 3 the input could not be read, 4 the file is refused (hash, inspect) or the block asked for is
+// not there or did not parse (canonical).
 return Run(args);
 
 static int Run(string[] args)
@@ -30,7 +31,11 @@ static int Run(string[] args)
         {
             if (args.Length != 2) return Usage();
             if (!ReadText(args[1], out string text, out string error)) return Fail(3, error);
-            var blocks = ChartHash.OfFile(text).Select(b => new Block
+            // A file SongInfo refuses (an unsupported COURSE, a block written twice) is exit 4, as in inspect.
+            List<ChartBlockHash> hashes;
+            try { hashes = ChartHash.OfFile(text); }
+            catch (FormatException e) { return Fail(4, e.Message); }
+            var blocks = hashes.Select(b => new Block
             {
                 Course = b.Course, Side = b.Side, Level = b.Level, Branching = b.IsBranching, Hash = b.Hash, Error = b.Error,
             }).ToList();
