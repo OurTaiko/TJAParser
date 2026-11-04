@@ -1,7 +1,9 @@
-# dotnet~ is hidden from Unity by its trailing ~, not from git: re-include it ahead of the
-# build-output rules below, since a global `*~` rule would otherwise drop the whole folder.
+# dotnet~ and Documentation~ are hidden from Unity by their trailing ~, not from git: re-include
+# them ahead of the build-output rules below, since a global `*~` rule would otherwise drop them.
 !dotnet~/
 !dotnet~/**
+!Documentation~/
+!Documentation~/**
 bin/
 obj/
 .vs/
