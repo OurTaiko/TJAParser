@@ -20,6 +20,21 @@ namespace OurTaiko
         // Where each note, bar line and event of Chart is written.
         public ChartSourceMap SourceMap { get; } = new ChartSourceMap();
 
+        // The block's #START line, and where it ends (its #END, or where a missing #END would be).
+        public TextSpan StartSpan { get; internal set; }
+        public TextSpan EndSpan { get; internal set; }
+
+        // What is in force at a position of the block's body (from the end of #START to the start of
+        // #END): what the next token there is read with. Null outside the body or without a chart.
+        // The block is read again up to there, so a call costs about one parse of the block.
+        public TjaPositionState StateAt(int offset)
+        {
+            if (Chart == null || offset < StartSpan.End || offset > EndSpan.Start) return null;
+            var sources = new List<LineSource>();
+            var parser = new TjaParser.ChartParser(sources, new List<TjaDiagnostic>());
+            return parser.Capture(Text, TjaLines.Read(Text, sources), Course, Side, offset);
+        }
+
         // Every measure in the order it is written: the common ones and each route's (see
         // Played for one route's run through the chart).
         public IReadOnlyList<ChartMeasure> Measures => measures;
@@ -66,5 +81,38 @@ namespace OurTaiko
         public int BranchId { get; internal set; } = -1;
         public BranchRoute Route { get; internal set; }
         public ChartNote Bar { get; internal set; }
+    }
+
+    // What is in force at a position of a block (TjaAnalysis.StateAt). Time, Beat, Bpm, ScrollX,
+    // ScrollY, ScrollMode, SuddenShow and SuddenMove are what a note written there would get.
+    public sealed class TjaPositionState
+    {
+        public double Time { get; internal set; }
+        public double Beat { get; internal set; }
+        public double Bpm { get; internal set; }
+        // The measure's length in whole notes (#MEASURE 3/4 is 0.75).
+        public double MeasureLength { get; internal set; }
+        public double ScrollX { get; internal set; }
+        public double ScrollY { get; internal set; }
+        public ScrollMode ScrollMode { get; internal set; }
+        public bool Barline { get; internal set; }
+        public bool Gogo { get; internal set; }
+        public double SuddenShow { get; internal set; }
+        public double SuddenMove { get; internal set; }
+        // The measure being written (its Index), the note slot in it, and how many it has (0 and 0
+        // between measures, as before a branch command).
+        public int Measure { get; internal set; }
+        public int Slot { get; internal set; }
+        public int Slots { get; internal set; }
+        // The branch being written (-1 outside one), and its route (null before the first #N/#E/#M,
+        // where notes are common, and outside a branch).
+        public int BranchId { get; internal set; }
+        public BranchRoute? Route { get; internal set; }
+        // The kind of the roll still open on the route being written, if any.
+        public NoteKind? OpenRoll { get; internal set; }
+        // The list the next balloon takes its count from, its place there, and the count (5 past the end).
+        public string BalloonList { get; internal set; }
+        public int BalloonIndex { get; internal set; }
+        public int NextBalloonHits { get; internal set; }
     }
 }

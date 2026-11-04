@@ -46,6 +46,8 @@ namespace OurTaiko
             var sources = new List<LineSource>();
             var parser = new ChartParser(sources, analysis.diagnostics, analysis.SourceMap, analysis.measures);
             analysis.Chart = parser.Run(text, TjaLines.Read(text ?? "", sources), requestedCourse, requestedSide);
+            analysis.StartSpan = parser.StartSpan;
+            analysis.EndSpan = parser.EndSpan;
             return analysis;
         }
 
@@ -180,7 +182,7 @@ namespace OurTaiko
             // #START and sixteenth notes, accumulated in its order of operations.
             public double RawMs, Beat, Bpm, Measure = 1, ScrollX = 1, ScrollY, Clock16;
             public double SuddenShow = double.PositiveInfinity, SuddenMove = double.PositiveInfinity;
-            public bool Barline = true;
+            public bool Barline = true, Gogo;
             public ScrollMode Mode;
             public TimingState Copy() => (TimingState)MemberwiseClone();
         }
@@ -205,6 +207,14 @@ namespace OurTaiko
             // Where each note, bar and event comes from, and the measures, for an analysis.
             readonly ChartSourceMap map;
             readonly List<ChartMeasure> measures;
+            // The block's #START line and where it ends (#END, or what ended it), for an analysis.
+            internal TextSpan StartSpan, EndSpan;
+            // TjaAnalysis.StateAt: the state before the first token at or after CaptureAt is read.
+            internal int CaptureAt = -1;
+            TjaPositionState captured;
+            sealed class Captured : Exception { }
+            // The note slot being read in the measure, and how many it has (0, 0 between measures).
+            int slot, slotCount;
             long offsetMs;
             // The cursor's time: OpenTaiko's (int)dbNowTime, shifted by OFFSET, in seconds.
             double Now => ((long)state.RawMs - offsetMs) / 1000.0;
@@ -332,6 +342,7 @@ namespace OurTaiko
                         if (reading)
                         {
                             found = true;
+                            StartSpan = span;
                             chart.Course = Course(course).Split('_')[0];
                             if (level != null) AtHeader(levelLine, levelSource);
                             // Recovery: an unreadable LEVEL is 0.
@@ -345,6 +356,7 @@ namespace OurTaiko
                         if (line.Implicit) Warn(TjaDiagnosticKind.EndMissing);
                         endLine = line.Line;
                         endSpan = span;
+                        EndSpan = span;
                         ended = true; break;
                     }
                     if (line.Kind == TjaLineKind.Body)
@@ -463,6 +475,39 @@ namespace OurTaiko
                 }
             }
 
+            // The state where a position is (TjaAnalysis.StateAt): the block is read up to the first
+            // token at or after it.
+            public TjaPositionState Capture(string text, IEnumerable<TjaLine> lines, string requestedCourse, string requestedSide, int offset)
+            {
+                CaptureAt = offset;
+                try { Run(text, lines, requestedCourse, requestedSide); }
+                catch (Captured) { }
+                return captured;
+            }
+
+            void Checkpoint()
+            {
+                if (CaptureAt >= 0 && span.Start >= CaptureAt) Capture();
+            }
+
+            void Capture()
+            {
+                int list = InRoute ? (int)route : 0;
+                int next = balloonIndex[list];
+                var open = openRoll[InRoute ? (int)route : 0];
+                captured = new TjaPositionState
+                {
+                    Time = Now, Beat = state.Beat, Bpm = state.Bpm, MeasureLength = state.Measure,
+                    ScrollX = state.ScrollX, ScrollY = state.ScrollY, ScrollMode = state.Mode,
+                    Barline = state.Barline, Gogo = state.Gogo, SuddenShow = state.SuddenShow, SuddenMove = state.SuddenMove,
+                    Measure = measure, Slot = slot, Slots = slotCount,
+                    BranchId = branch?.Id ?? -1, Route = InRoute ? route : (BranchRoute?)null,
+                    OpenRoll = open?.Kind,
+                    BalloonList = BalloonHeaders[list], BalloonIndex = next, NextBalloonHits = next < balloons[list].Count ? balloons[list][next] : 5,
+                };
+                throw new Captured();
+            }
+
             // Where token t is.
             void At(int t)
             {
@@ -487,6 +532,7 @@ namespace OurTaiko
                         FlushCommands();
                         // The commands before it moved the position; the branch command is here.
                         At(t);
+                        Checkpoint();
                         Command(token);
                     }
                     else
@@ -498,6 +544,8 @@ namespace OurTaiko
                 // OpenTaiko reads notes after the last comma as a measure of their own.
                 if (pendingNotes > 0) { Warn(TjaDiagnosticKind.LastMeasureWithoutComma); Flush(atComma: false); }
                 else FlushCommands();
+                // A position after the last token: the state the block ends in.
+                if (CaptureAt >= 0) Capture();
                 line = endLine; span = endSpan;
                 if (branch != null) EndBranch(); // #BRANCHEND is optional before #END / the next branch.
                 // OpenTaiko (TaikoJiro compatibility): #END ends unended rolls.
@@ -540,6 +588,7 @@ namespace OurTaiko
                 for (int i = 0; i < pending.Count; i++)
                 {
                     At(pending[i]);
+                    Checkpoint();
                     Command(tokens[pending[i]]);
                 }
                 pending.Clear();
@@ -703,6 +752,7 @@ namespace OurTaiko
 
             void SetGogo(bool on)
             {
+                state.Gogo = on;
                 var gogo = new ChartGogo { Time = Now, On = on, BranchId = BranchId, Route = route };
                 chart.Gogos.Add(gogo);
                 map?.Add(gogo, span);
@@ -887,10 +937,13 @@ namespace OurTaiko
                 ChartNote bar = null;
                 int barStart = 0;
                 double barLength = 0;
+                slotCount = slots;
                 for (int i = 0; i < pending.Count; i++)
                 {
                     string token = tokens[pending[i]];
                     At(pending[i]);
+                    slot = index;
+                    Checkpoint();
                     if (token[0] == '#') { Command(token); continue; }
                     if (!addedBar)
                     {
@@ -963,6 +1016,9 @@ namespace OurTaiko
                     state.Clock16 += state.Measure * (16.0 / slots);
                     index++;
                 }
+                // The comma: the measure's slots are all read.
+                slot = index;
+                if (atComma) { span = commaSpan; Checkpoint(); }
                 if (index == 0)
                 {
                     line = commaLine; span = commaSpan;
@@ -984,6 +1040,7 @@ namespace OurTaiko
                 measure++;
                 pending.Clear();
                 pendingNotes = 0;
+                slot = slotCount = 0;
             }
         }
     }
