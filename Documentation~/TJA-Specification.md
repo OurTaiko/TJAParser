@@ -259,7 +259,7 @@ Clock16 += Measure × 16 / n
 
 ### 6.2 `#MEASURE <a>/<b>`
 
-拍号改为 `a/b`（两个数各转为单精度浮点再相除，与 OpenTaiko 相同）。结果必须为正且有限；读不出数、缺 `/`：**块解析失败**。拍号从下一个槽起生效，通常写在小节开头。
+拍号改为 `a/b`（两个数各转为单精度浮点再相除，与 OpenTaiko 相同）。结果必须为正且有限；读不出数、缺 `/`：**块解析失败**（`FormatException`）。拍号从下一个槽起生效，通常写在小节开头。
 
 ### 6.3 `#SCROLL <speed>`
 
@@ -531,7 +531,6 @@ Clock16 += Measure × 16 / n
 以下是整理本文时发现、尚未修改的行为，记录于此以免被误当作规范意图：
 
 1. **`LEVEL` 读不出**：`SongInfo` 当 0，而 `TjaParser.Parse` 抛 `FormatException` 使块解析失败；且 `Parse` 读到所选块结束为止的所有 LEVEL，所以**别的难度**里一个读不出的 `LEVEL` 也会让这一块失败。`BPM`、`OFFSET` 同理（`SongInfo` 用默认值）。
-2. **`#MEASURE` 缺 `/`**（如 `#MEASURE 4`）：抛 `IndexOutOfRangeException` 而不是 `FormatException`。结果同样是块解析失败，但消息不友好。
-3. **CLI `hash` 遇到文件拒绝**（如不支持的 COURSE）：未捕获 `FormatException`，进程异常终止（退出码 134），而 `inspect` 正确返回 4。两站用的是 `inspect`。
-4. **`TjaParser.Parse` 的 COURSE 匹配**不把 `Ura` 视为 `Edit`；通过 `SongInfo.Blocks` 传原文时没有问题，直接传 `"Edit"` 解析写成 `COURSE:Ura` 的块会找不到。
-5. `README.md` 中「每个难度每个侧别只取文件里第一块」的说法与代码不符：代码对重复的难度与侧别直接拒绝整个文件（3.2）。
+2. **CLI `hash` 遇到文件拒绝**（如不支持的 COURSE）：未捕获 `FormatException`，进程异常终止（退出码 134），而 `inspect` 正确返回 4。两站用的是 `inspect`。
+3. **`TjaParser.Parse` 的 COURSE 匹配**不把 `Ura` 视为 `Edit`；通过 `SongInfo.Blocks` 传原文时没有问题，直接传 `"Edit"` 解析写成 `COURSE:Ura` 的块会找不到。
+4. `README.md` 中「每个难度每个侧别只取文件里第一块」的说法与代码不符：代码对重复的难度与侧别直接拒绝整个文件（3.2）。

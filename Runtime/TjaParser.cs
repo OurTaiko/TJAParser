@@ -461,7 +461,12 @@ namespace OurTaiko
                         AddClockPoint();
                         break;
                     // OpenTaiko keeps the two numbers as floats and divides them as floats.
-                    case "#MEASURE": var parts = arg.Split('/'); state.Measure = (float)Number(parts[0]) / (float)Number(parts[1]); if (!(state.Measure > 0) || double.IsInfinity(state.Measure)) throw new FormatException("Invalid MEASURE."); break;
+                    case "#MEASURE":
+                        var parts = arg.Split('/');
+                        if (parts.Length < 2) throw new FormatException($"Invalid MEASURE (a/b): {command}");
+                        state.Measure = (float)Number(parts[0]) / (float)Number(parts[1]);
+                        if (!(state.Measure > 0) || double.IsInfinity(state.Measure)) throw new FormatException("Invalid MEASURE.");
+                        break;
                     case "#SCROLL":
                         // An unreadable SCROLL keeps the current one (OpenTaiko drops the command).
                         if (Scroll(arg, out double scrollX, out double scrollY)) { state.ScrollX = scrollX; state.ScrollY = scrollY; }
