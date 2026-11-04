@@ -532,6 +532,7 @@ namespace OurTaiko
                     BranchId = branch?.Id ?? -1, Route = InRoute ? route : (BranchRoute?)null,
                     OpenRoll = open?.Kind,
                     BalloonList = BalloonHeaders[list], BalloonIndex = next, NextBalloonHits = next < balloons[list].Count ? balloons[list][next] : 5,
+                    BalloonListed = next < balloons[list].Count,
                 };
                 throw new Captured();
             }

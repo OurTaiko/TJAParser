@@ -124,9 +124,11 @@ namespace OurTaiko
         public BranchRoute? Route { get; internal set; }
         // The kind of the roll still open on the route being written, if any.
         public NoteKind? OpenRoll { get; internal set; }
-        // The list the next balloon takes its count from, its place there, and the count (5 past the end).
+        // The list the next balloon takes its count from, its place there, and the count: from the
+        // list (BalloonListed), or 5 past its end.
         public string BalloonList { get; internal set; }
         public int BalloonIndex { get; internal set; }
         public int NextBalloonHits { get; internal set; }
+        public bool BalloonListed { get; internal set; }
     }
 }

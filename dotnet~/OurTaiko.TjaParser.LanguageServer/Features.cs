@@ -9,6 +9,7 @@ public sealed partial class Server
     static partial void FeatureCapabilities(JsonObject capabilities)
     {
         capabilities["completionProvider"] = new JsonObject { ["triggerCharacters"] = new JsonArray("#", ":", " ") };
+        capabilities["hoverProvider"] = true;
     }
 
     partial void Features(string method, JsonObject p, CancellationToken cancel, ref JsonNode result, ref bool handled)
@@ -18,6 +19,15 @@ public sealed partial class Server
             case "textDocument/completion":
                 handled = true;
                 result = At(p, out var document, out int offset) ? Completion(document, offset, cancel) : null;
+                break;
+            case "textDocument/hover":
+                handled = true;
+                if (At(p, out document, out offset) && TjaHover.At(document, offset, cancel) is TjaHoverInfo hover)
+                    result = new JsonObject
+                    {
+                        ["contents"] = new JsonObject { ["kind"] = "markdown", ["value"] = hover.Markdown },
+                        ["range"] = Range(document, hover.Span),
+                    };
                 break;
         }
     }
