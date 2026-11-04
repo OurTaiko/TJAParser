@@ -40,6 +40,10 @@ namespace OurTaiko
     {
         static readonly Regex CourseLine = new Regex(@"^COURSE\s*:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+        // Only a line starting with c or C can match CourseLine (no other character is c in any
+        // case), so the regex runs for those alone and not for every note line of a block.
+        static bool IsCourseLine(string line) => (line[0] == 'C' || line[0] == 'c') && CourseLine.IsMatch(line);
+
         public static IEnumerable<TjaLine> Read(string text)
         {
             bool inBlock = false;
@@ -50,7 +54,7 @@ namespace OurTaiko
                 string line = uncommented.Trim();
                 if (line.Length == 0) continue;
                 bool start = line.StartsWith("#START", StringComparison.OrdinalIgnoreCase);
-                if (inBlock && (start || CourseLine.IsMatch(line)))
+                if (inBlock && (start || IsCourseLine(line)))
                 {
                     inBlock = false;
                     yield return new TjaLine(TjaLineKind.End, "#END", @implicit: true, line: number);
