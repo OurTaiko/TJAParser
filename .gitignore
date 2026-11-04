@@ -12,3 +12,4 @@ obj/
 *.swp
 .DS_Store
 TestResults/
+BenchmarkDotNet.Artifacts/
