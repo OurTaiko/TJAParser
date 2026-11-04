@@ -1,6 +1,6 @@
 # 解析器自身优化 TODO
 
-只涉及解析器本身（正确性、性能、结构），不含谱面 IDE 相关的工作。按优先级排列，做完一项把状态从 ⬜ 改为 ✅，并在「记录」里写上提交或说明。
+只涉及解析器本身（正确性、性能、结构），不含谱面 IDE 相关的工作。按优先级排列，做完一项把状态从 ⬜ 改为 ✅，并在「记录」里写上提交或说明；➖ 表示评估后不做，理由写在「记录」里。
 
 - **P0**：安全网与已知 bug，先做。
 - **P1**：热路径零风险优化，不改变行为。
@@ -43,8 +43,8 @@
 |---|---|---|---|---|---|---|
 | ✅ | P2-1 | 读行时整文件复制 2–3 次，每行 `ToString` + `Trim` | `TjaLines.Uncommented` | 原文上扫描换行，按需生成子串 | 分配明显下降 | `LineReader` 在原文上找换行，只为保留的内容生成一个已 trim 的子串；`LineReaderTests` 用旧实现作参照，在 2 万份随机文本上逐行一致；SongInfoRead 分配 Donkama −22%（401→313 KB）、Large −22%（1877→1462 KB），剩余主要是每行的字符串与 `SongInfo` 的 `ToList`（留给 P2-2/P2-3）；golden 不变 |
 | ✅ | P2-2 | `OfFile` 对每块从头重读，O(块数 × 文件长度) | `ChartHash.OfFile`、`TjaParser.Parse` | 一次读完全部行、切好块，每块带生效的头部上下文；`OfFile` 与 `Parse` 共用 | 多块文件耗时近似线性 | `OfFile` 只读一次行列表，交给 `SongInfo.Read` 与各块的 `Parse`（内部重载，公开 API 不变）；每块仍从头遍历行列表取头部，但不再生成字符串。新测试 `OfFileGivesWhatEachBlockGivesAlone` 证明与逐块 `OfBlock` 一致。OfFile：Donkama 3.38→2.67 MB、Large 40.1→35.2 MB（56→44 ms）；剩余大头是规范文本（P2-6） |
-| ⬜ | P2-3 | `SongInfo` 与 `TjaParser` 各自解释头部 | `SongInfo.Read`、`TjaParser.Parse` | 抽出共用的头部读取（与 P0-7、P2-2 一起） | 口径一致 | |
-| ⬜ | P2-4 | token 是 `List<string>` | `NoteTokens` / `ChartReader` | struct token，音符不生成字符串，命令 key 只求一次 | 解析阶段无按音符分配 | |
+| ➖ | P2-3 | `SongInfo` 与 `TjaParser` 各自解释头部 | `SongInfo.Read`、`TjaParser.Parse` | 抽出共用的头部读取（与 P0-7、P2-2 一起） | 口径一致 | ➖ 评估后不做。真正的口径差异已在别处统一：选块按难度（P0-6）、只读生效的 BPM/OFFSET/LEVEL（P0-7）、行只读一次并共用（P2-2）。剩下的差异是有意的：`SongInfo` 是整首歌的元数据（取文件里最后一个可读值，读不出用默认值），`Parse` 是某一块（取块结束前的值，读不出则块失败，见规范 §14.1）。再抽一层公共头部读取只是搬代码 |
+| ➖ | P2-4 | token 是 `List<string>` | `NoteTokens` / `ChartReader` | struct token，音符不生成字符串，命令 key 只求一次 | 解析阶段无按音符分配 | ➖ 评估后不做。P1-3、P1-4 之后音符已不再生成字符串（单字符串来自缓存，命令 token 就是行文本本身），token 列表只剩引用。实测 Large 最后一块 `Parse` 约 1.7 MB：`ChartNote` 输出本身约 0.64 MB、行字符串约 0.35 MB，token 列表（含扩容）约 0.3 MB。改成逐行喂给 `ChartReader` 最多省约 15%，还要额外一遍预扫描才能保持现有的报错顺序，收益与风险不相称 |
 | ✅ | P2-5 | `Command` 大 switch，参数解析分散 | `ChartReader.Command` | 按命令拆成小方法，统一「读不出则丢弃并警告」 | 纯重构 | `Command` 只做分发；`BpmChange`、`Measure`、`Scroll`、`Delay`、`LevelHold`、`JposScroll`、`Sudden`、`LaneAlphaCommand` 各成方法，可丢弃的指令返回 false、由 `Command` 统一 `Warn(command)`；golden 不变 |
 | ✅ | P2-6 | 规范文本每个字段一个字符串（`N()`、`params string[]`）：Large 每块写规范文本分配约 4 MB，是解析本身的 2 倍（P1 后实测补入） | `ChartCanonical.Write`、`ChartHash.OfCanonical` | 数字用 `TryFormat("R")` 直接写入缓冲；SHA-256 按块增量计算，不整串转 UTF-8 | 规范文本逐字节不变，`OfFile` 分配大幅下降 | `Writer` 把数字用 `TryFormat` 直接写进 `StringBuilder`（不预设容量，避免大对象堆）；`OfCanonical` 用 `IncrementalHash` 按 8 KB 缓冲编码。golden 的全部哈希不变即规范文本逐字节不变；`CanonicalHashTests` 覆盖跨缓冲的代理对。OfFile：Donkama 2.67→1.79 MB、Large 35.2→18.4 MB（44→34 ms） |
 
