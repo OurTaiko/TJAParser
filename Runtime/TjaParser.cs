@@ -44,7 +44,7 @@ namespace OurTaiko
         {
             var analysis = new TjaAnalysis(text, requestedCourse, requestedSide);
             var sources = new List<LineSource>();
-            var parser = new ChartParser(sources, analysis.diagnostics, analysis.SourceMap);
+            var parser = new ChartParser(sources, analysis.diagnostics, analysis.SourceMap, analysis.measures);
             analysis.Chart = parser.Run(text, TjaLines.Read(text ?? "", sources), requestedCourse, requestedSide);
             return analysis;
         }
@@ -202,8 +202,9 @@ namespace OurTaiko
             TextSpan span;
             // Every problem where it is, for an analysis; null when parsing for play.
             readonly List<TjaDiagnostic> diagnostics;
-            // Where each note, bar and event comes from, for an analysis.
+            // Where each note, bar and event comes from, and the measures, for an analysis.
             readonly ChartSourceMap map;
+            readonly List<ChartMeasure> measures;
             long offsetMs;
             // The cursor's time: OpenTaiko's (int)dbNowTime, shifted by OFFSET, in seconds.
             double Now => ((long)state.RawMs - offsetMs) / 1000.0;
@@ -238,11 +239,12 @@ namespace OurTaiko
             List<ChartEntry> Entries => InRoute ? routeLists[(int)route] : common;
             bool warnedCommonInBranch;
 
-            public ChartParser(List<LineSource> sources, List<TjaDiagnostic> diagnostics = null, ChartSourceMap map = null)
+            public ChartParser(List<LineSource> sources, List<TjaDiagnostic> diagnostics = null, ChartSourceMap map = null, List<ChartMeasure> measures = null)
             {
                 this.sources = sources;
                 this.diagnostics = diagnostics;
                 this.map = map;
+                this.measures = measures;
                 if (sources != null) tokenSpans = new List<TextSpan>();
             }
 
@@ -884,6 +886,7 @@ namespace OurTaiko
                 bool addedBar = false;
                 ChartNote bar = null;
                 int barStart = 0;
+                double barLength = 0;
                 for (int i = 0; i < pending.Count; i++)
                 {
                     string token = tokens[pending[i]];
@@ -893,6 +896,7 @@ namespace OurTaiko
                     {
                         bar = AddBar();
                         barStart = span.Start;
+                        barLength = state.Measure;
                         addedBar = true;
                     }
                     // A note character is its NoteKind in base 36 (G is 16), upper case only as in OpenTaiko;
@@ -964,12 +968,19 @@ namespace OurTaiko
                     line = commaLine; span = commaSpan;
                     bar = AddBar();
                     barStart = span.Start;
+                    barLength = state.Measure;
                     state.RawMs += 15000.0 / state.Bpm * state.Measure * 16.0;
                     state.Beat += 4 * state.Measure;
                     state.Clock16 += state.Measure * 16.0;
                 }
                 chart.Duration = Math.Max(chart.Duration, Now);
-                map?.Add(bar, TextSpan.FromBounds(barStart, atComma ? commaSpan.End : span.End));
+                var measureSpan = TextSpan.FromBounds(barStart, atComma ? commaSpan.End : span.End);
+                map?.Add(bar, measureSpan);
+                measures?.Add(new ChartMeasure
+                {
+                    Index = measure, Span = measureSpan, StartTime = bar.Time, EndTime = Now, Bpm = bar.Bpm, Length = barLength,
+                    Slots = slots, BranchId = bar.BranchId, Route = bar.Route, Bar = bar,
+                });
                 measure++;
                 pending.Clear();
                 pendingNotes = 0;
