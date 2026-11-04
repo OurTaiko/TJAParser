@@ -149,7 +149,7 @@ CRLF、单独的 CR、LF 都算一个换行（与 OpenTaiko 相同）。行号�
 
 ### 3.3 `TjaParser.Parse` 的选块
 
-取文件中**第一个** COURSE 匹配（数字 0–4 换成名字后不分大小写比较）且侧别等于请求侧别的块。找不到：块解析失败 `No … course (#START) on the … side.`。调用方应传 `TjaBlock.Course` 原文（`Parse` 不把 `Ura` 等同 `Edit`）。`TaikoChart.Course` 为 COURSE 去掉 `_` 后缀后的名字。
+取文件中**第一个** COURSE 与请求的难度相同（按 3.1 归一，所以 `Edit`、`Ura`、`4` 是同一难度；3.1 不认识的写法按原文不分大小写比较）且侧别等于请求侧别的块。找不到：块解析失败 `No … course (#START) on the … side.`。`TaikoChart.Course` 为 COURSE 去掉 `_` 后缀后的名字。
 
 ---
 
@@ -531,5 +531,4 @@ Clock16 += Measure × 16 / n
 以下是整理本文时发现、尚未修改的行为，记录于此以免被误当作规范意图：
 
 1. **`LEVEL` 读不出**：`SongInfo` 当 0，而 `TjaParser.Parse` 抛 `FormatException` 使块解析失败；且 `Parse` 读到所选块结束为止的所有 LEVEL，所以**别的难度**里一个读不出的 `LEVEL` 也会让这一块失败。`BPM`、`OFFSET` 同理（`SongInfo` 用默认值）。
-2. **`TjaParser.Parse` 的 COURSE 匹配**不把 `Ura` 视为 `Edit`；通过 `SongInfo.Blocks` 传原文时没有问题，直接传 `"Edit"` 解析写成 `COURSE:Ura` 的块会找不到。
-3. `README.md` 中「每个难度每个侧别只取文件里第一块」的说法与代码不符：代码对重复的难度与侧别直接拒绝整个文件（3.2）。
+2. `README.md` 中「每个难度每个侧别只取文件里第一块」的说法与代码不符：代码对重复的难度与侧别直接拒绝整个文件（3.2）。

@@ -15,8 +15,15 @@ namespace OurTaiko
         static string Course(string value)
             => int.TryParse(value, out int n) && n >= 0 && n < SongInfo.CourseNames.Count ? SongInfo.CourseNames[n] : value;
 
+        // By difficulty, as SongInfo reads COURSE:, so `Edit`, `Ura` and `4` are one course; a value
+        // SongInfo does not know is compared as written.
         static bool SameCourse(string course, string requestedCourse)
-            => string.Equals(Course(course), Course(requestedCourse), StringComparison.OrdinalIgnoreCase);
+        {
+            var difficulty = course == null ? null : SongInfo.DifficultyOf(course);
+            var requested = requestedCourse == null ? null : SongInfo.DifficultyOf(requestedCourse);
+            if (difficulty != null || requested != null) return difficulty == requested;
+            return string.Equals(Course(course), Course(requestedCourse), StringComparison.OrdinalIgnoreCase);
+        }
 
         // One parse for every mode: how branches are played is PlaySession's choice. The block of
         // the requested course on the requested side ("single", "p1" or "p2", #START's player) is
