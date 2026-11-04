@@ -140,11 +140,11 @@ namespace OurTaiko
             if (value.IndexOf('i') < 0) return TjaNumber.TryParse(Infinity.Replace(value, "Infinity"), out x);
             string[] parts = ComplexParts.Split(value);
             var ri = new double[2];
-            int first = parts[0].EndsWith("i") ? 1 : 0;
+            int first = parts[0].EndsWith('i') ? 1 : 0;
             for (int k = 0, n = Math.Min(2 - first, parts.Length); k < n; k++)
             {
                 string part = Infinity.Replace(parts[k], "Infinity").Replace(" ", "");
-                if (first + k == 1 && part.EndsWith("i"))
+                if (first + k == 1 && part.EndsWith('i'))
                 {
                     part = part.TrimEnd('i');
                     if (part.Length == 0 || part[part.Length - 1] == '+' || part[part.Length - 1] == '-') part += "1";
@@ -689,7 +689,7 @@ namespace OurTaiko
                 var args = arg.Split(Blanks, StringSplitOptions.RemoveEmptyEntries);
                 double ms = 0;
                 if (args.Length < 1 || args.Length > 2
-                    || !TjaNumber.TryParse(args[0].EndsWith("%") ? args[0].Substring(0, args[0].Length - 1) : args[0], out double percent)
+                    || !TjaNumber.TryParse(args[0].EndsWith('%') ? args[0].Substring(0, args[0].Length - 1) : args[0], out double percent)
                     || !(percent >= 0 && percent <= 100)
                     || args.Length == 2 && (!TjaNumber.TryParse(args[1], out ms) || double.IsNaN(ms) || double.IsInfinity(ms)))
                     return false;
