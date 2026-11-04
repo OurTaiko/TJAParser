@@ -30,6 +30,11 @@ namespace OurTaiko
         // played; which side a seat plays is the caller's choice (SongInfo.Block,
         // FanmadeChart.Block), so a single block stays playable where the course also has a P1 one.
         public static TaikoChart Parse(string text, string requestedCourse = "Oni", string requestedSide = "single")
+            => Parse(text, TjaLines.Read(text), requestedCourse, requestedSide);
+
+        // The same from the file's lines already read (TjaLines.Read of text), so that several
+        // blocks of one file are parsed without reading it again (ChartHash.OfFile).
+        internal static TaikoChart Parse(string text, IEnumerable<TjaLine> lines, string requestedCourse, string requestedSide)
         {
             if (string.IsNullOrWhiteSpace(text)) throw new FormatException("The TJA chart is empty.");
             if (Array.IndexOf(ChartSide.All, requestedSide) < 0) throw new ArgumentException($"Unknown side '{requestedSide}'.", nameof(requestedSide));
@@ -48,7 +53,7 @@ namespace OurTaiko
             // A scroll command after the course's COURSE: and before its #START sets how it begins.
             ScrollMode startMode = ScrollMode.Normal;
             // The first block of the requested course on the requested side is played.
-            foreach (var line in TjaLines.Read(text))
+            foreach (var line in lines)
             {
                 if (line.Kind == TjaLineKind.Start)
                 {

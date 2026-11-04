@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -45,17 +46,27 @@ namespace OurTaiko
 
         // Every block the game can list (SongInfo.Blocks: every #START, in file order; a file with
         // a difficulty and side written twice is refused), each parsed as the game plays it.
-        public static List<ChartBlockHash> OfFile(string text) => OfFile(text, SongInfo.Read(text));
-
-        public static List<ChartBlockHash> OfFile(string text, SongInfo info)
+        // The file's lines are read once, for SongInfo and every block.
+        public static List<ChartBlockHash> OfFile(string text)
         {
-            var result = new List<ChartBlockHash>();
-            foreach (var block in info.Blocks) result.Add(OfBlock(text, block));
+            if (string.IsNullOrWhiteSpace(text)) throw new FormatException("The TJA chart is empty.");
+            var lines = TjaLines.Read(text).ToList();
+            return OfFile(text, lines, SongInfo.Read(lines, null));
+        }
+
+        public static List<ChartBlockHash> OfFile(string text, SongInfo info) => OfFile(text, TjaLines.Read(text ?? "").ToList(), info);
+
+        static List<ChartBlockHash> OfFile(string text, List<TjaLine> lines, SongInfo info)
+        {
+            var result = new List<ChartBlockHash>(info.Blocks.Count);
+            foreach (var block in info.Blocks) result.Add(OfBlock(text, lines, block));
             return result;
         }
 
         // One listed block, parsed as the game plays it.
-        public static ChartBlockHash OfBlock(string text, TjaBlock block)
+        public static ChartBlockHash OfBlock(string text, TjaBlock block) => OfBlock(text, null, block);
+
+        static ChartBlockHash OfBlock(string text, List<TjaLine> lines, TjaBlock block)
         {
             var entry = new ChartBlockHash
             {
@@ -64,7 +75,8 @@ namespace OurTaiko
             };
             try
             {
-                var chart = TjaParser.Parse(text, block.Course, block.Side);
+                var chart = lines == null ? TjaParser.Parse(text, block.Course, block.Side)
+                    : TjaParser.Parse(text, lines, block.Course, block.Side);
                 entry.Hash = Of(chart);
                 entry.Chart = chart;
                 entry.Warnings.AddRange(chart.Warnings);

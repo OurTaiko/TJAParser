@@ -82,7 +82,12 @@ namespace OurTaiko
         public static SongInfo Read(string text, string language = null)
         {
             if (string.IsNullOrWhiteSpace(text)) throw new FormatException("The TJA chart is empty.");
-            var lines = TjaLines.Read(text).ToList();
+            return Read(TjaLines.Read(text).ToList(), language);
+        }
+
+        // The same from the file's lines already read (ChartHash.OfFile reads them once for all).
+        internal static SongInfo Read(List<TjaLine> lines, string language)
+        {
             // Whole-file checks first: an unsupported course anywhere stops the read.
             foreach (var line in lines)
                 if (line.Kind == TjaLineKind.Header && line.Key == "COURSE" && DifficultyOf(line.Value) == null)
