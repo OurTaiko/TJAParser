@@ -56,7 +56,7 @@
 | ✅ | P3-2 | `#STARTxxx` 被当成块开始 | `TjaLines.Read` | `#START` 后须是空白或行尾 | 有测试 | 按 OpenTaiko 的指令名规则（`#` 加大写字母，见其 `CommandAndArgumentRegex`）：`#START` 后紧跟字母（不分大小写）就不是块开始；`#START1` 等仍是（之后由 SongInfo 拒绝非 P1/P2）。golden 中只有 1 份含 `#STARTE` 的变异谱改变；规范 §1.4 同步 |
 | ✅ | P3-3 | 气球用完列表时静默取 5 | `NextBalloon` | 加警告 | 只多警告，哈希不变 | 警告 `A balloon has no count in BALLOON|BALLOONEXP|BALLOONMAS; it takes 5 hits (measure n)`，有内联打数的不警告；golden 有 456 份摘要变化，已核对：去掉这条警告后 644 份全部与之前一致；规范 §7.2 同步 |
 | ✅ | P3-4 | 警告不带位置 | 各处 `Warn` | 带行号 | 警告文本变化，同步两站 | 每条警告带首次出现的行号：`… (measure n)` → `… (measure n, line l)`，其余加 ` (line l)`；去重仍按原文字，所以警告的条数与顺序不变（已核对：去掉行号后 644 份摘要全部与之前一致）。token 带行号，块尾相关的警告用 `#END`（或隐式结束）所在行。规范 §0.1 同步。**两站**：警告文字多了行号 |
-| ⬜ | P3-5 | `ReadCondition`、`Scroll` 依赖正则 | `TjaParser.cs` | 手写解析 | 行为不变（测试 + fuzz） | |
+| ➖ | P3-5 | `ReadCondition`、`Scroll` 依赖正则 | `TjaParser.cs` | 手写解析 | 行为不变（测试 + fuzz） | ➖ 评估后不做。两处正则都是每条指令（`#SCROLL`、`#JPOSSCROLL`、`#BRANCHSTART`）跑一次，不在逐音符的热路径上；IL2CPP 下 Regex 可用。`Scroll` 的正则语义细节多（零宽切分、不分大小写排除 `e`/`E`、`inf`/`infinity` 替换），手写版本只增加行为差异的风险而没有收益 |
 | ✅ | P3-6 | 三处 `EndsWith("i")`／`EndsWith("%")` 按当前文化比较：游戏用玩家的文化，CLI 是 InvariantGlobalization（序数比较），以可忽略字符（如 U+00AD、U+200B）结尾时两边结果不同（实施中发现补入） | `TjaParser.Scroll`、`LaneAlphaCommand` | 改为序数的 `EndsWith(char)` | 无可构造的实际分歧（这些值随后都读不出）；golden 不变 | 改为 `EndsWith('i')`、`EndsWith('%')`；已验证 ja-JP 文化下 `"2i\\u00AD".EndsWith("i")` 为真而序数为假，但三处的值随后都读不出，所以结果本就一致，改动只是去掉隐患；golden 不变 |
 
 ## 基准记录
