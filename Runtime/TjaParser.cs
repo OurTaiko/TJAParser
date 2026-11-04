@@ -274,7 +274,7 @@ namespace OurTaiko
                 else FlushCommands();
                 if (branch != null) EndBranch(); // #BRANCHEND is optional before #END / the next branch.
                 // OpenTaiko (TaikoJiro compatibility): #END ends unended rolls.
-                foreach (var note in OpenRolls()) { Warn("An unended roll is ended by #END"); CloseRoll(note, Entries); }
+                for (int k = 0, open = OpenRolls(); k < open; k++) { Warn("An unended roll is ended by #END"); CloseRoll(openHeads[k], Entries); }
                 chart.Duration = Math.Max(chart.Duration, Now);
                 chart.Notes.Sort((a, b) => a.Time.CompareTo(b.Time));
                 chart.Bars.Sort((a, b) => a.Time.CompareTo(b.Time));
@@ -299,18 +299,27 @@ namespace OurTaiko
                 pending.Clear();
             }
 
-            // The distinct heads still open on the routes being written (one head may sit on several).
-            IEnumerable<ChartNote> OpenRolls()
-            {
-                var seen = new HashSet<ChartNote>();
-                foreach (int r in Routes())
-                    if (openRoll[r] != null && seen.Add(openRoll[r])) yield return openRoll[r];
-            }
+            // The routes being written: the current one, or all three outside a route.
+            int FirstRoute => InRoute ? (int)route : 0;
+            int LastRoute => InRoute ? (int)route : 2;
 
-            IEnumerable<int> Routes()
+            // The distinct heads still open on the routes being written (one head may sit on
+            // several), in route order, into openHeads; their count. Closing one of them leaves the
+            // others open, so the caller may close them as it goes through the list.
+            readonly ChartNote[] openHeads = new ChartNote[3];
+
+            int OpenRolls()
             {
-                if (InRoute) yield return (int)route;
-                else for (int r = 0; r < 3; r++) yield return r;
+                int count = 0;
+                for (int r = FirstRoute, last = LastRoute; r <= last; r++)
+                {
+                    var head = openRoll[r];
+                    if (head == null) continue;
+                    bool seen = false;
+                    for (int k = 0; k < count; k++) seen |= openHeads[k] == head;
+                    if (!seen) openHeads[count++] = head;
+                }
+                return count;
             }
 
             // Ends a roll here on the routes being written. A head shared by several routes keeps
@@ -325,7 +334,7 @@ namespace OurTaiko
                     note.EndScrollClock = state.Clock16 / 16;
                 }
                 else if (note.EndTime != Now) Warn($"A roll shared by the routes ends at different times; the first end is kept (measure {measure})");
-                foreach (int r in Routes())
+                for (int r = FirstRoute, last = LastRoute; r <= last; r++)
                     if (openRoll[r] == note) { openRoll[r] = null; rollEndAfterBar[r] = Math.Max(rollEndAfterBar[r] ?? Now, Now); }
                 entries.Add(new ChartEntry(note, true));
             }
@@ -612,17 +621,17 @@ namespace OurTaiko
                     // where it stands and is then placed itself.
                     if (type == 8)
                     {
-                        bool closed = false;
-                        foreach (var open in OpenRolls()) { CloseRoll(open, Entries); closed = true; }
-                        if (!closed) Warn($"A stray 8 with no roll to end is treated as a blank (measure {measure})");
+                        int open = OpenRolls();
+                        for (int k = 0; k < open; k++) CloseRoll(openHeads[k], Entries);
+                        if (open == 0) Warn($"A stray 8 with no roll to end is treated as a blank (measure {measure})");
                     }
                     else if (type != 0)
                     {
                         bool blank = false;
-                        foreach (var open in OpenRolls())
+                        for (int k = 0, open = OpenRolls(); k < open; k++)
                         {
                             if (type >= 5 && type <= 9) { Warn($"A roll head inside a roll is treated as a blank (measure {measure})"); blank = true; }
-                            else { Warn($"An unended roll is ended by a note of type {type} (measure {measure})"); CloseRoll(open, Entries); }
+                            else { Warn($"An unended roll is ended by a note of type {type} (measure {measure})"); CloseRoll(openHeads[k], Entries); }
                         }
                         // OpenTaiko's unknown symbol: it ends an open roll as a note would, then is a blank.
                         if (type == Unused) { Warn($"The unused note E is treated as a blank (measure {measure})"); blank = true; }
@@ -637,7 +646,7 @@ namespace OurTaiko
                         }
                         chart.Notes.Add(note);
                         Entries.Add(new ChartEntry(note, false));
-                        if (note.IsLong) foreach (int r in Routes()) openRoll[r] = note;
+                        if (note.IsLong) for (int r = FirstRoute, last = LastRoute; r <= last; r++) openRoll[r] = note;
                     }
                     advance:
                     state.RawMs += 15000.0 / state.Bpm * state.Measure * (16.0 / slots);
