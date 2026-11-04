@@ -29,7 +29,7 @@
 | 状态 | 编号 | 事项 | 位置 | 做法 | 记录 |
 |---|---|---|---|---|---|
 | ✅ | P1-1 | 每个音符调用 `Enum.IsDefined`（反射、装箱） | `TjaParser.cs` `Flush` | 静态 `bool[36]` 查表 | 静态表 `IsNoteKind`；golden 不变 |
-| ⬜ | P1-2 | 每个非空音符分配 2 个迭代器和 1 个 `HashSet` | `OpenRolls()` / `Routes()` | 直接对 3 条路线循环，局部去重 | |
+| ✅ | P1-2 | 每个非空音符分配 2 个迭代器和 1 个 `HashSet` | `OpenRolls()` / `Routes()` | 直接对 3 条路线循环，局部去重 | 复用 3 格数组 `openHeads`，先取快照再逐个收尾（与原惰性迭代等价：收尾只清空同一音符的路线）；golden 不变 |
 | ⬜ | P1-3 | 每个 token（含音符）都 `Split` + `ToUpperInvariant` | `ChartReader.Read`、`Command` | 只对 `#` 开头的 token 求 key | |
 | ⬜ | P1-4 | 每个音符字符 `c.ToString()` | `NoteTokens` | 128 项单字符串缓存 | |
 | ⬜ | P1-5 | 警告去重 `List.Contains`，O(W²) | `Warn` 及各处 `chart.Warnings.Contains` | 统一走 `Warn`，内部配 `HashSet` | |
