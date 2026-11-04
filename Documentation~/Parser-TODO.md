@@ -44,7 +44,7 @@
 
 | 状态 | 编号 | 事项 | 依赖 | 做法 | 验收 | 记录 |
 |---|---|---|---|---|---|---|
-| ⬜ | I2-1 | LSP 服务骨架 | I1-1、I1-4 | 新工程 `dotnet~/OurTaiko.TjaParser.LanguageServer`：文档同步、按版本产出快照、取消；VS Code 与自研编辑器（Monaco + monaco-languageclient）共用 | 在 VS Code 打开 .tja 能连上并收到诊断 | |
+| ✅ | I2-1 | LSP 服务骨架 | I1-1、I1-4 | 新工程 `dotnet~/OurTaiko.TjaParser.LanguageServer`：文档同步、按版本产出快照、取消；VS Code 与自研编辑器（Monaco + monaco-languageclient）共用 | 在 VS Code 打开 .tja 能连上并收到诊断 | 新工程 `dotnet~/OurTaiko.TjaParser.LanguageServer`（`tja-language-server`，不依赖第三方 LSP 库，按 `Content-Length` 分帧的 JSON-RPC 自己实现）：生命周期（initialize／shutdown／exit 退出码）、文档同步（全量与增量，UTF-16 位置）、每个 URI 一份 `TjaDocument` 版本链、改动后在后台读诊断并按版本发布（防抖默认 150 ms，新改动取消旧的读取）、请求在后台执行并支持 `$/cancelRequest`、未知方法回 -32601。库里新增 `TjaDocument.Diagnostics`（各块诊断合并，多块共有的只报一次）。VS Code 客户端在 `Editors~/vscode`（package.json、extension.js、注释配置）。**验收方式与计划不同**：这里没有 VS Code，改为启动真实服务进程经标准输入输出走完整流程——打开文档收到带正确行列的诊断、两次增量修改后收到新版本的诊断、shutdown＋exit 退出码 0；另用独立的 Python 客户端对发布出的服务做了一次握手。扩展只验证了 JS 语法、JSON 与依赖包的接口（`npm install` 成功，`LanguageClient`／`start`／`stop` 存在），**未在 VS Code 中实际运行** |
 | ⬜ | I2-2 | 诊断推送，并补 IDE 需要的新诊断 | I0-2、I2-1 | 推送 I0-2 的诊断；新增：`LEVEL` 不在 1–10、未知指令提示相近的指令名、小节格数不是常见分音、分歧各路线长度不一致 | 每个新诊断有测试；旧 API 的警告不因此改变（新诊断只出现在 IDE 入口，或单独评估是否进 `Warnings`） | |
 | ⬜ | I2-3 | 补全 | I0-6、I1-3 | 块外补头部名与取值（COURSE、STYLE、LEVEL…）；块内 `#` 后按上下文补指令（`#N/#E/#M` 只在分歧内，`#BRANCHEND` 只在分歧打开时）；`#BRANCHSTART` 后补条件类型；音符字符 | 每种上下文有测试 | |
 | ⬜ | I2-4 | 悬停 | I0-4、I0-6、I1-3 | 音符：时刻、小节:拍、BPM×SCROLL、音符文字、气球打数及其来自 BALLOON 的第几项、所在路线；指令与头部：Schema 中的文档 | fixture 上抽查结果与解析结果一致 | |

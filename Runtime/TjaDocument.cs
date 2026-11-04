@@ -34,6 +34,9 @@ namespace OurTaiko
         TjaSourceText lineStarts;
 
         // Made once, whichever thread asks first (another may make one too; one is kept).
+        // Lines and columns of Text.
+        public TjaSourceText Lines => LineStarts;
+
         List<TjaLine> AllLines => LazyInitializer.EnsureInitialized(ref lines, () => new List<TjaLine>(TjaLines.Read(Text)));
         TjaSourceText LineStarts => LazyInitializer.EnsureInitialized(ref lineStarts, () => new TjaSourceText(Text));
 
@@ -96,6 +99,25 @@ namespace OurTaiko
                     return blocks;
                 }
             }
+        }
+
+        // Every problem of the document: each block's, analysed as asked (Analyze), once each
+        // where several blocks share one (a header before them all), in the order of the text.
+        public List<TjaDiagnostic> Diagnostics(CancellationToken cancel = default)
+        {
+            var all = new List<TjaDiagnostic>();
+            var seen = new HashSet<(string, int, int, string)>();
+            var keys = new HashSet<(string, string)>();
+            foreach (var block in Blocks)
+            {
+                if (!keys.Add((block.Course, block.Side))) continue;
+                foreach (var d in Analyze(block.Course, block.Side, cancel).Diagnostics)
+                    if (seen.Add((d.Code, d.Span.Start, d.Span.Length, d.Message))) all.Add(d);
+            }
+            // Stable: in the text's order, a block's own order where they meet.
+            var ordered = new List<TjaDiagnostic>(all.Count);
+            foreach (var d in System.Linq.Enumerable.OrderBy(all, d => d.Span.Start)) ordered.Add(d);
+            return ordered;
         }
 
         // One block, as TjaParser.Analyze reads it. Threads may ask at once (a block asked for by
