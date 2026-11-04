@@ -4,13 +4,18 @@ using System.Threading;
 
 namespace OurTaiko
 {
-    // One #START of a document: COURSE as written (what Analyze takes) and its side.
+    // One #START of a document: COURSE as written (what Analyze takes), its side, its #START line
+    // and where it ends (its #END, or where a missing #END would be).
     public sealed class TjaDocumentBlock
     {
         public string Course { get; internal set; }
         public string Side { get; internal set; }
         public int Line { get; internal set; }
         public TextSpan StartSpan { get; internal set; }
+        public TextSpan EndSpan { get; internal set; }
+
+        // Whether an offset is in its body: from the end of #START to the start of its end.
+        public bool Contains(int offset) => offset >= StartSpan.End && offset <= EndSpan.Start;
     }
 
     // An editor's text at one version, read block by block as asked (Analyze). A new version
@@ -73,6 +78,14 @@ namespace OurTaiko
         // The whole text as syntax tokens (TjaSyntax.Tokenize), made once per version.
         public IReadOnlyList<TjaSyntaxToken> Syntax => LazyInitializer.EnsureInitialized(ref syntax, () => TjaSyntax.Tokenize(Text));
 
+        // The block whose body an offset is in, or null.
+        public TjaDocumentBlock BlockAt(int offset)
+        {
+            foreach (var block in Blocks)
+                if (block.Contains(offset)) return block;
+            return null;
+        }
+
         // Every #START, in file order.
         public IReadOnlyList<TjaDocumentBlock> Blocks
         {
@@ -89,6 +102,8 @@ namespace OurTaiko
                     {
                         index++;
                         if (line.Kind == TjaLineKind.Header && line.Key == "COURSE") course = line.Value;
+                        if (line.Kind == TjaLineKind.End && blocks.Count > 0)
+                            blocks[blocks.Count - 1].EndSpan = positions[index].Span(0, line.Implicit ? 0 : line.Text.Length);
                         if (line.Kind != TjaLineKind.Start) continue;
                         blocks.Add(new TjaDocumentBlock
                         {
