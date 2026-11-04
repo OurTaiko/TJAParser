@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace OurTaiko
 {
@@ -39,17 +40,19 @@ namespace OurTaiko
 
         // One block with every problem where it is (TjaAnalysis), for an editor. Unlike Parse it
         // does not stop at an error: it notes it, reads on as the error's recovery says, and gives
-        // the chart that comes out. Only an unknown side throws, as in Parse.
-        public static TjaAnalysis Analyze(string text, string requestedCourse = "Oni", string requestedSide = "single")
+        // the chart that comes out. Only an unknown side throws, as in Parse; a cancelled read
+        // throws OperationCanceledException and gives nothing.
+        public static TjaAnalysis Analyze(string text, string requestedCourse = "Oni", string requestedSide = "single", CancellationToken cancel = default)
         {
             var analysis = new TjaAnalysis(text, requestedCourse, requestedSide);
             var sources = new List<LineSource>();
-            var parser = new ChartParser(sources, analysis.diagnostics, analysis.SourceMap, analysis.measures);
+            var parser = new ChartParser(sources, analysis.diagnostics, analysis.SourceMap, analysis.measures) { Cancel = cancel };
             var read = new List<TjaLine>();
             analysis.ReadLines = read;
             analysis.Chart = parser.Run(text, Keep(TjaLines.Read(text ?? "", sources), parser, analysis), requestedCourse, requestedSide);
             analysis.StartSpan = parser.StartSpan;
             analysis.EndSpan = parser.EndSpan;
+            analysis.SourceMap.Seal();
             return analysis;
         }
 
@@ -228,6 +231,8 @@ namespace OurTaiko
             readonly List<ChartMeasure> measures;
             // The block's #START line and where it ends (#END, or what ended it), for an analysis.
             internal TextSpan StartSpan, EndSpan;
+            // Checked every so many lines and tokens.
+            internal CancellationToken Cancel;
             // The index of the block's #START among the lines read.
             internal int StartLineIndex = -1;
             // TjaAnalysis.StateAt: the state before the first token at or after CaptureAt is read.
@@ -355,6 +360,7 @@ namespace OurTaiko
                 foreach (var line in lines)
                 {
                     index++;
+                    if ((index & 255) == 0) Cancel.ThrowIfCancellationRequested();
                     this.line = line.Line;
                     if (sources != null) span = sources[index].Span(0, line.Implicit ? 0 : line.Text.Length);
                     if (line.Kind == TjaLineKind.Start)
@@ -546,6 +552,7 @@ namespace OurTaiko
             {
                 for (int t = 0; t < tokens.Count; t++)
                 {
+                    if ((t & 255) == 0) Cancel.ThrowIfCancellationRequested();
                     string token = tokens[t];
                     At(t);
                     if (token == ",") Flush();

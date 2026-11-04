@@ -1,16 +1,21 @@
 using System.Collections.Generic;
+using System.Threading;
 
 namespace OurTaiko
 {
     // What an editor reads of one block of a TJA file (TjaParser.Analyze): the chart, every problem
-    // where it is, and (from later steps) where each part of the chart comes from. The game and the
-    // servers use TjaParser.Parse, which tracks none of this.
+    // where it is, and where each part of the chart comes from. The game and the servers use
+    // TjaParser.Parse, which tracks none of this. An analysis is a snapshot: nothing in it changes
+    // once it is made (Chart included: it is not to be changed by its readers either), so threads
+    // may read it at once.
     public sealed class TjaAnalysis
     {
         public string Text { get; }
         // The block asked for, as in TjaParser.Parse.
         public string Course { get; }
         public string Side { get; }
+        // The TjaDocument version it is of (0 when made by TjaParser.Analyze).
+        public int Version { get; internal set; }
         // The chart as read, errors recovered from (see TjaParser.Analyze); null when there is no
         // such block, or no text.
         public TaikoChart Chart { get; internal set; }
@@ -27,11 +32,11 @@ namespace OurTaiko
         // What is in force at a position of the block's body (from the end of #START to the start of
         // #END): what the next token there is read with. Null outside the body or without a chart.
         // The block is read again up to there, so a call costs about one parse of the block.
-        public TjaPositionState StateAt(int offset)
+        public TjaPositionState StateAt(int offset, CancellationToken cancel = default)
         {
             if (Chart == null || offset < StartSpan.End || offset > EndSpan.Start) return null;
             var sources = new List<LineSource>();
-            var parser = new TjaParser.ChartParser(sources, new List<TjaDiagnostic>());
+            var parser = new TjaParser.ChartParser(sources, new List<TjaDiagnostic>()) { Cancel = cancel };
             return parser.Capture(Text, TjaLines.Read(Text, sources), Course, Side, offset);
         }
 
