@@ -12,11 +12,11 @@
 
 | 级别 | 含义 | 出现方式 |
 |---|---|---|
-| **文件拒绝** | 整个文件不可用，游戏列不出任何块，服务器拒收 | `SongInfo.Read` 抛 `FormatException`（CLI `inspect` 退出码 4） |
+| **文件拒绝** | 整个文件不可用，游戏列不出任何块，服务器拒收 | `SongInfo.Read` 抛 `FormatException`（CLI `hash`、`inspect` 退出码 4） |
 | **块解析失败** | 只有这一块不可玩；其他块照常 | `TjaParser.Parse` 抛异常（`FormatException`、`NotSupportedException` 或其他）；CLI 中该块带 `error`、没有 `hash` |
-| **警告** | 照 OpenTaiko 的容错继续解析，结果可玩 | 文字记入 `TaikoChart.Warnings`（同一文字只记一次）；CLI 中为 `warnings` |
+| **警告** | 照 OpenTaiko 的容错继续解析，结果可玩 | 文字记入 `TaikoChart.Warnings`（同一文字只记一次，带首次出现的行号：以 `(measure n)` 结尾的写成 `(measure n, line l)`，其余在末尾加 ` (line l)`）；CLI 中为 `warnings` |
 
-本文中「丢弃并警告」指该指令不产生任何效果，原文记入警告。
+本文中「丢弃并警告」指该指令不产生任何效果，原文记入警告。下文引用的警告文字都省略行号。
 
 ### 0.2 术语
 

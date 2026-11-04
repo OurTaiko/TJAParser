@@ -40,6 +40,11 @@ namespace OurTaiko
             if (Array.IndexOf(ChartSide.All, requestedSide) < 0) throw new ArgumentException($"Unknown side '{requestedSide}'.", nameof(requestedSide));
             var chart = new TaikoChart();
             var tokens = new List<string>();
+            // The file line of each token, for the warnings.
+            var tokenLines = new List<int>();
+            int endLine = 0;
+            // Header warnings once each, by their text.
+            var headerWarned = new HashSet<string>();
             // Balloon hits per route (Normal, Expert, Master); headers before any COURSE are
             // every course's defaults, and each COURSE starts again from them.
             var globalBalloons = NewBalloonLists();
@@ -64,7 +69,8 @@ namespace OurTaiko
                 if (line.Kind == TjaLineKind.End)
                 {
                     if (!reading) continue;
-                    if (line.Implicit) chart.Warnings.Add("#END missing");
+                    if (line.Implicit) chart.Warnings.Add(AtLine("#END missing", line.Line));
+                    endLine = line.Line;
                     ended = true; break;
                 }
                 if (line.Kind == TjaLineKind.Body)
@@ -72,6 +78,7 @@ namespace OurTaiko
                     if (!reading) continue;
                     if (line.Text[0] == '#') tokens.Add(line.Text);
                     else NoteTokens(line.Text, tokens);
+                    while (tokenLines.Count < tokens.Count) tokenLines.Add(line.Line);
                     continue;
                 }
                 if (line.Kind == TjaLineKind.Other)
@@ -95,7 +102,7 @@ namespace OurTaiko
                     // OpenTaiko: BALLOON is the Normal route's list; each header replaces its route's list.
                     case "BALLOON": case "BALLOONNOR": case "BALLOONEXP": case "BALLOONMAS":
                         int route = line.Key == "BALLOONEXP" ? 1 : line.Key == "BALLOONMAS" ? 2 : 0;
-                        if (!Balloons(value, out var hits)) { if (!chart.Warnings.Contains(line.Text)) chart.Warnings.Add(line.Text); break; }
+                        if (!Balloons(value, out var hits)) { if (headerWarned.Add(line.Text)) chart.Warnings.Add(AtLine(line.Text, line.Line)); break; }
                         balloons[route] = hits;
                         if (!seenCourse) globalBalloons[route] = new List<int>(hits);
                         break;
@@ -106,8 +113,19 @@ namespace OurTaiko
             // OpenTaiko keeps OFFSET in whole milliseconds, cut toward zero.
             if (offset != null) chart.Offset = (int)(Number(offset) * 1000) / 1000.0;
             if (!(chart.Bpm > 0) || double.IsInfinity(chart.Bpm)) throw new FormatException("BPM must be positive and finite.");
-            new ChartReader(chart, balloons, startMode).Read(tokens);
+            new ChartReader(chart, balloons, startMode).Read(tokens, tokenLines, endLine);
             return chart;
+        }
+
+        // A warning with the file line it was met at: `… (measure n)` becomes `… (measure n, line l)`,
+        // anything else gets ` (line l)`.
+        internal static string AtLine(string warning, int line)
+        {
+            if (line <= 0) return warning;
+            int measure = warning.LastIndexOf("(measure ", StringComparison.Ordinal);
+            if (measure >= 0 && warning.IndexOf(')', measure) == warning.Length - 1)
+                return warning.Substring(0, warning.Length - 1) + ", line " + line.ToString(CultureInfo.InvariantCulture) + ")";
+            return warning + " (line " + line.ToString(CultureInfo.InvariantCulture) + ")";
         }
 
         // OpenTaiko #SCROLL (ParseReal / ParseComplex): a real number, or with an `i` a complex one
@@ -266,6 +284,9 @@ namespace OurTaiko
             // The measure being read: its commands and notes in order, and how many are notes.
             readonly List<string> pending = new List<string>();
             int pendingNotes;
+            readonly List<int> pendingLines = new List<int>();
+            // The file line of the token being read, for the warnings.
+            int line;
             TimingState state, branchStart;
             ChartBranch branch;
             readonly bool[] routesSeen = new bool[3];
@@ -292,7 +313,6 @@ namespace OurTaiko
             public ChartReader(TaikoChart chart, List<int>[] balloons, ScrollMode mode)
             {
                 this.chart = chart; this.balloons = balloons;
-                warned = new HashSet<string>(chart.Warnings);
                 offsetMs = (long)Math.Round(chart.Offset * 1000);
                 state = new TimingState { Bpm = chart.Bpm, Mode = mode };
                 chart.NoteLists.Add(common);
@@ -304,10 +324,12 @@ namespace OurTaiko
             void AddClockPoint() => chart.ScrollClocks.Add(new ChartClockPoint { Time = Now, RawMs = state.RawMs, Clock = state.Clock16 / 16,
                 Bpm = state.Bpm, BranchId = branch != null && hasRoute ? branch.Id : -1, Route = route });
 
-            public void Read(List<string> tokens)
+            public void Read(List<string> tokens, List<int> tokenLines, int endLine)
             {
-                foreach (string token in tokens)
+                for (int t = 0; t < tokens.Count; t++)
                 {
+                    string token = tokens[t];
+                    line = tokenLines[t];
                     if (token == ",") Flush();
                     else if (token[0] == '#' && IsBranchCommand(CommandKey(token)))
                     {
@@ -317,12 +339,14 @@ namespace OurTaiko
                     else
                     {
                         pending.Add(token);
+                        pendingLines.Add(line);
                         if (token[0] != '#') pendingNotes++;
                     }
                 }
                 // OpenTaiko reads notes after the last comma as a measure of their own.
-                if (pendingNotes > 0) { chart.Warnings.Add("Last measure without a comma"); Flush(); }
+                if (pendingNotes > 0) { Warn("Last measure without a comma"); Flush(); }
                 else FlushCommands();
+                line = endLine;
                 if (branch != null) EndBranch(); // #BRANCHEND is optional before #END / the next branch.
                 // OpenTaiko (TaikoJiro compatibility): #END ends unended rolls.
                 for (int k = 0, open = OpenRolls(); k < open; k++) { Warn("An unended roll is ended by #END"); CloseRoll(openHeads[k], Entries); }
@@ -355,8 +379,13 @@ namespace OurTaiko
             void FlushCommands()
             {
                 if (pendingNotes > 0) throw new FormatException("A measure is missing its comma before a branch boundary.");
-                foreach (string token in pending) Command(token);
+                for (int i = 0; i < pending.Count; i++)
+                {
+                    line = pendingLines[i];
+                    Command(pending[i]);
+                }
                 pending.Clear();
+                pendingLines.Clear();
             }
 
             // The routes being written: the current one, or all three outside a route.
@@ -484,12 +513,12 @@ namespace OurTaiko
                 target.ExpertThreshold = expert; target.MasterThreshold = master;
             }
 
-            // Each warning once, in the order first met (the set holds what chart.Warnings has).
-            readonly HashSet<string> warned;
+            // Each warning once, in the order first met, with the line it was first met at.
+            readonly HashSet<string> warned = new HashSet<string>();
 
             void Warn(string warning)
             {
-                if (warned.Add(warning)) chart.Warnings.Add(warning);
+                if (warned.Add(warning)) chart.Warnings.Add(AtLine(warning, line));
             }
 
             void SelectRoute(BranchRoute selected)
@@ -676,10 +705,12 @@ namespace OurTaiko
 
             void Flush()
             {
-                int slots = pendingNotes, index = 0;
+                int slots = pendingNotes, index = 0, commaLine = line;
                 bool addedBar = false;
-                foreach (string token in pending)
+                for (int i = 0; i < pending.Count; i++)
                 {
+                    string token = pending[i];
+                    line = pendingLines[i];
                     if (token[0] == '#') { Command(token); continue; }
                     if (!addedBar)
                     {
@@ -741,6 +772,7 @@ namespace OurTaiko
                 }
                 if (index == 0)
                 {
+                    line = commaLine;
                     AddBar();
                     state.RawMs += 15000.0 / state.Bpm * state.Measure * 16.0;
                     state.Beat += 4 * state.Measure;
@@ -749,6 +781,7 @@ namespace OurTaiko
                 chart.Duration = Math.Max(chart.Duration, Now);
                 measure++;
                 pending.Clear();
+                pendingLines.Clear();
                 pendingNotes = 0;
             }
         }
