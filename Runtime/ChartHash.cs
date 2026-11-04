@@ -35,14 +35,35 @@ namespace OurTaiko
 
         public static string Of(TaikoChart chart) => OfCanonical(ChartCanonical.Write(chart));
 
+        // SHA-256 of the text's UTF-8 bytes, encoded a buffer at a time rather than all at once.
         public static string OfCanonical(string canonical)
         {
-            using var sha = SHA256.Create();
-            byte[] sum = sha.ComputeHash(Encoding.UTF8.GetBytes(canonical));
-            var sb = new StringBuilder(Prefix, Prefix.Length + sum.Length * 2);
-            foreach (byte b in sum) sb.Append(b.ToString("x2"));
-            return sb.ToString();
+            byte[] sum;
+            using (var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+            {
+                var encoder = Encoding.UTF8.GetEncoder();
+                var buffer = new byte[8192];
+                var chars = canonical.AsSpan();
+                bool completed = false;
+                while (!completed)
+                {
+                    encoder.Convert(chars, buffer, true, out int used, out int written, out completed);
+                    sha.AppendData(buffer, 0, written);
+                    chars = chars.Slice(used);
+                }
+                sum = sha.GetHashAndReset();
+            }
+            var hex = new char[Prefix.Length + sum.Length * 2];
+            Prefix.CopyTo(0, hex, 0, Prefix.Length);
+            for (int i = 0; i < sum.Length; i++)
+            {
+                hex[Prefix.Length + 2 * i] = HexDigits[sum[i] >> 4];
+                hex[Prefix.Length + 2 * i + 1] = HexDigits[sum[i] & 15];
+            }
+            return new string(hex);
         }
+
+        const string HexDigits = "0123456789abcdef";
 
         // Every block the game can list (SongInfo.Blocks: every #START, in file order; a file with
         // a difficulty and side written twice is refused), each parsed as the game plays it.
