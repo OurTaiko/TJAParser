@@ -69,4 +69,10 @@ public class ReadingRuleTests
     [Fact]
     public void AnotherCoursesLevelIsNotInForce()
         => Assert.Equal(0, TjaParser.Parse("BPM:120\nCOURSE:Easy\nLEVEL:3\nCOURSE:Oni\n#START\n1,\n#END\n").Level);
+
+    // A branch command's warning carries its own line, though commands before it were just run.
+    [Fact]
+    public void ABranchCommandIsWarnedAboutOnItsOwnLine()
+        => Assert.Contains("#BRANCHSTART x,1,2 (line 5)",
+            TjaParser.Parse("BPM:120\nCOURSE:Oni\n#START\n#SCROLL 2\n#BRANCHSTART x,1,2\n#N\n1,\n#BRANCHEND\n#END\n").Warnings);
 }
