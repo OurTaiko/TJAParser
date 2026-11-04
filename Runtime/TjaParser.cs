@@ -265,6 +265,7 @@ namespace OurTaiko
             public ChartReader(TaikoChart chart, List<int>[] balloons, ScrollMode mode)
             {
                 this.chart = chart; this.balloons = balloons;
+                warned = new HashSet<string>(chart.Warnings);
                 offsetMs = (long)Math.Round(chart.Offset * 1000);
                 state = new TimingState { Bpm = chart.Bpm, Mode = mode };
                 chart.NoteLists.Add(common);
@@ -446,9 +447,12 @@ namespace OurTaiko
                 target.ExpertThreshold = expert; target.MasterThreshold = master;
             }
 
+            // Each warning once, in the order first met (the set holds what chart.Warnings has).
+            readonly HashSet<string> warned;
+
             void Warn(string warning)
             {
-                if (!chart.Warnings.Contains(warning)) chart.Warnings.Add(warning);
+                if (warned.Add(warning)) chart.Warnings.Add(warning);
             }
 
             void SelectRoute(BranchRoute selected)
@@ -521,13 +525,13 @@ namespace OurTaiko
                     case "#SCROLL":
                         // An unreadable SCROLL keeps the current one (OpenTaiko drops the command).
                         if (Scroll(arg, out double scrollX, out double scrollY)) { state.ScrollX = scrollX; state.ScrollY = scrollY; }
-                        else if (!chart.Warnings.Contains(command)) chart.Warnings.Add(command);
+                        else Warn(command);
                         break;
                     case "#DELAY":
                         // An unreadable DELAY is dropped with a warning, as SCROLL is.
                         if (!TjaNumber.TryParse(arg, out double delay) || double.IsNaN(delay) || double.IsInfinity(delay))
                         {
-                            if (!chart.Warnings.Contains(command)) chart.Warnings.Add(command);
+                            Warn(command);
                             break;
                         }
                         double start = Now;
@@ -566,7 +570,7 @@ namespace OurTaiko
                             || !Scroll(jpos[1], out double jposX, out double jposY)
                             || jpos.Length >= 3 && !int.TryParse(jpos[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out jposDirection))
                         {
-                            if (!chart.Warnings.Contains(command)) chart.Warnings.Add(command);
+                            Warn(command);
                             break;
                         }
                         if (jposDirection == 0) { jposX = -jposX; jposY = -jposY; }
@@ -578,14 +582,14 @@ namespace OurTaiko
                         var times = arg.Split(Blanks, StringSplitOptions.RemoveEmptyEntries);
                         if (times.Length < 2 || !TjaNumber.TryParse(times[0], out double show) || !TjaNumber.TryParse(times[1], out double move))
                         {
-                            if (!chart.Warnings.Contains(command)) chart.Warnings.Add(command);
+                            Warn(command);
                             break;
                         }
                         state.SuddenShow = Math.Abs(Math.Truncate(show * 1000)) >= 1 ? show : double.PositiveInfinity;
                         state.SuddenMove = Math.Abs(Math.Truncate(move * 1000)) >= 1 ? Math.Truncate(move * 1000) / 1000 : double.PositiveInfinity;
                         break;
                     case "#LANE_ALPHA": LaneAlphaCommand(command, arg); break;
-                    default: if (!chart.Warnings.Contains(key)) chart.Warnings.Add(key); break;
+                    default: Warn(key); break;
                 }
             }
 
