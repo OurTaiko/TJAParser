@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Speed and allocation of the parser: `dotnet run -c Release`, optionally with a BenchmarkDotNet filter. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>OurTaiko.Benchmarks</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../Corpus/**/*.cs" LinkBase="Corpus" />
+    <ProjectReference Include="../OurTaiko.TjaParser/OurTaiko.TjaParser.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../OurTaiko.TjaParser.Tests/Fixtures/*.tja" LinkBase="Fixtures" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
