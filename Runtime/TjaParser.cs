@@ -45,10 +45,23 @@ namespace OurTaiko
             var analysis = new TjaAnalysis(text, requestedCourse, requestedSide);
             var sources = new List<LineSource>();
             var parser = new ChartParser(sources, analysis.diagnostics, analysis.SourceMap, analysis.measures);
-            analysis.Chart = parser.Run(text, TjaLines.Read(text ?? "", sources), requestedCourse, requestedSide);
+            var read = new List<TjaLine>();
+            analysis.Chart = parser.Run(text, Keep(TjaLines.Read(text ?? "", sources), read), requestedCourse, requestedSide);
             analysis.StartSpan = parser.StartSpan;
             analysis.EndSpan = parser.EndSpan;
+            analysis.ReadLines = read;
+            analysis.StartLineIndex = parser.StartLineIndex;
             return analysis;
+        }
+
+        // The lines as they are read, kept (TjaDocument compares them to reuse an analysis).
+        static IEnumerable<TjaLine> Keep(IEnumerable<TjaLine> lines, List<TjaLine> read)
+        {
+            foreach (var line in lines)
+            {
+                read.Add(line);
+                yield return line;
+            }
         }
 
         // A warning with the file line it was met at: `… (measure n)` becomes `… (measure n, line l)`,
@@ -209,6 +222,8 @@ namespace OurTaiko
             readonly List<ChartMeasure> measures;
             // The block's #START line and where it ends (#END, or what ended it), for an analysis.
             internal TextSpan StartSpan, EndSpan;
+            // The index of the block's #START among the lines read.
+            internal int StartLineIndex = -1;
             // TjaAnalysis.StateAt: the state before the first token at or after CaptureAt is read.
             internal int CaptureAt = -1;
             TjaPositionState captured;
@@ -343,6 +358,7 @@ namespace OurTaiko
                         {
                             found = true;
                             StartSpan = span;
+                            StartLineIndex = index;
                             chart.Course = Course(course).Split('_')[0];
                             if (level != null) AtHeader(levelLine, levelSource);
                             // Recovery: an unreadable LEVEL is 0.

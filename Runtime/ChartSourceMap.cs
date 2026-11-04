@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace OurTaiko
@@ -38,6 +39,17 @@ namespace OurTaiko
         }
 
         public bool TryGetSpan(object item, out TextSpan span) => spans.TryGetValue(item, out span);
+
+        // The same map with every span moved (TjaDocument).
+        internal ChartSourceMap Moved(Func<TextSpan, TextSpan> move)
+        {
+            var moved = new ChartSourceMap();
+            foreach (var pair in spans) moved.spans[pair.Key] = move(pair.Value);
+            foreach (var pair in tails) moved.tails[pair.Key] = move(pair.Value);
+            foreach (var entry in written) moved.written.Add((move(entry.Span), entry.Note, entry.Tail));
+            moved.sorted = sorted;
+            return moved;
+        }
 
         public bool TryGetTailSpan(ChartNote note, out TextSpan span) => tails.TryGetValue(note, out span);
 
