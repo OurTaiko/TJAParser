@@ -10,6 +10,10 @@ public sealed partial class Server
     {
         capabilities["completionProvider"] = new JsonObject { ["triggerCharacters"] = new JsonArray("#", ":", " ") };
         capabilities["hoverProvider"] = true;
+        capabilities["signatureHelpProvider"] = new JsonObject
+        {
+            ["triggerCharacters"] = new JsonArray(" ", ","), ["retriggerCharacters"] = new JsonArray(" ", ","),
+        };
     }
 
     partial void Features(string method, JsonObject p, CancellationToken cancel, ref JsonNode result, ref bool handled)
@@ -19,6 +23,22 @@ public sealed partial class Server
             case "textDocument/completion":
                 handled = true;
                 result = At(p, out var document, out int offset) ? Completion(document, offset, cancel) : null;
+                break;
+            case "textDocument/signatureHelp":
+                handled = true;
+                if (At(p, out document, out offset) && TjaSignatureHelp.At(document, offset) is TjaSignature signature)
+                {
+                    var parameters = new JsonArray();
+                    foreach (var (start, length) in signature.Parameters) parameters.Add(new JsonObject { ["label"] = new JsonArray(start, start + length) });
+                    result = new JsonObject
+                    {
+                        ["signatures"] = new JsonArray(new JsonObject
+                        {
+                            ["label"] = signature.Label, ["documentation"] = signature.Keyword.Summary, ["parameters"] = parameters,
+                        }),
+                        ["activeSignature"] = 0, ["activeParameter"] = signature.Active,
+                    };
+                }
                 break;
             case "textDocument/hover":
                 handled = true;
