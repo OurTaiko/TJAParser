@@ -148,6 +148,17 @@ namespace OurTaiko
                 : key == "#HBSCROLL" ? ScrollMode.HBScroll : (ScrollMode?)null;
         }
 
+        // The ASCII characters as strings, so a note line's tokens are not allocated one by one
+        // (Unity's runtime has no such cache of its own).
+        static readonly string[] AsciiStrings = Ascii();
+
+        static string[] Ascii()
+        {
+            var strings = new string[128];
+            for (int c = 0; c < strings.Length; c++) strings[c] = ((char)c).ToString();
+            return strings;
+        }
+
         // A note line's tokens: one per character, spaces skipped. `[…]` (not in OpenTaiko) stays
         // on the note before it, as in `7[10]`, and must close on the same line.
         static void NoteTokens(string text, List<string> tokens)
@@ -156,7 +167,7 @@ namespace OurTaiko
             {
                 char c = text[i];
                 if (char.IsWhiteSpace(c)) continue;
-                if (c != '[') { tokens.Add(c.ToString()); continue; }
+                if (c != '[') { tokens.Add(c < AsciiStrings.Length ? AsciiStrings[c] : c.ToString()); continue; }
                 int close = text.IndexOf(']', i);
                 if (close < 0) throw new FormatException($"Unclosed [ in: {text}");
                 if (i == 0 || tokens[tokens.Count - 1].Length != 1 || tokens[tokens.Count - 1] == ",")
