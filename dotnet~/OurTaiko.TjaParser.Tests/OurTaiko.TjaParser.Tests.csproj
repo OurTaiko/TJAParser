@@ -17,6 +17,9 @@
     <ProjectReference Include="../tjaparser/tjaparser.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="../Corpus/**/*.cs" LinkBase="Corpus" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include="Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
