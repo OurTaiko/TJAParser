@@ -79,7 +79,7 @@ public class LaneAlphaTests
     {
         var chart = Parse(command + "\n1000,\n");
         Assert.Empty(chart.LaneAlphas);
-        Assert.Contains(command, chart.Warnings);
+        Assert.Contains(command + " (line 4)", chart.Warnings);
         Assert.Single(chart.Notes);
     }
 

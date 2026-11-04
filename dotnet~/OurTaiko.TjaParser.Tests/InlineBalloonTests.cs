@@ -27,9 +27,9 @@ public class InlineBalloonTests
     {
         var chart = Parse("BALLOON:8\n", "7008,\n7008,\n7[9]008,\n");
         Assert.Equal(new[] { 8, 5, 9 }, Hits(chart));
-        Assert.Equal(new[] { "A balloon has no count in BALLOON; it takes 5 hits (measure 1)" }, chart.Warnings);
+        Assert.Equal(new[] { "A balloon has no count in BALLOON; it takes 5 hits (measure 1, line 6)" }, chart.Warnings);
         var routed = TjaParser.Parse("BPM:120\nCOURSE:Oni\nBALLOONEXP:4\n#START\n#BRANCHSTART p,50,80\n#N\n1,\n#E\n7008,\n#M\n7008,\n#BRANCHEND\n#END\n");
-        Assert.Equal(new[] { "A balloon has no count in BALLOONMAS; it takes 5 hits (measure 2)" }, routed.Warnings);
+        Assert.Equal(new[] { "A balloon has no count in BALLOONMAS; it takes 5 hits (measure 2, line 11)" }, routed.Warnings);
     }
 
     [Fact]

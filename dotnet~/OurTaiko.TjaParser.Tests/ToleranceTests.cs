@@ -45,7 +45,7 @@ public class ToleranceTests
     {
         var chart = Parse("5000,\n0000,\n");
         Assert.Equal(4, chart.Notes[0].EndTime);
-        Assert.Contains("An unended roll is ended by #END", chart.Warnings);
+        Assert.Contains("An unended roll is ended by #END (line 6)", chart.Warnings);
         Assert.Equal(new[] { false, true }, chart.NoteLists[0].Where(e => !e.IsBar).Select(e => e.IsTail));
     }
 
@@ -116,7 +116,7 @@ public class ToleranceTests
     {
         var chart = Parse("11\n" + delay + "\n11,\n");
         Assert.Equal(new[] { 0, 0.5, 1, 1.5 }, chart.Notes.Select(n => n.Time));
-        Assert.Contains(delay, chart.Warnings);
+        Assert.Contains(delay + " (line 5)", chart.Warnings);
         Assert.Equal(ChartHash.Of(Parse("1111,\n")), ChartHash.Of(chart));
     }
 }
