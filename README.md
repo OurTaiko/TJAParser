@@ -78,6 +78,21 @@ tjaparser version                             算法版本，如 v1
 cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # 自包含单文件、裁剪，选项在 tjaparser.csproj 里
 ```
 
+## 编辑器接口（`TjaParser.Analyze`）
+
+给谱面 IDE 用，游戏与服务器仍用 `TjaParser.Parse`（不记录这些，行为与分配不变）。`TjaParser.Analyze(text, course, side)` 返回 `TjaAnalysis`：
+
+| 成员 | 内容 |
+|---|---|
+| `Chart` | 解析出的谱面；遇到错误不停下，按各错误的恢复规则继续读（头部值读不出用默认、不认识的音符当空白、坏的 `#BPMCHANGE`/`#MEASURE` 丢弃……）。没有该块时为 null |
+| `Diagnostics` | 每一处问题：`Code`（`TJA1001`–`TJA1016` 错误、`TJA2001`–`TJA2016` 警告，见 `Runtime/TjaDiagnostic.cs`）、`Message`（与 `Parse` 的异常、`Warnings` 同一文字）、`Args`、`Line`、`Span` |
+| `SourceMap` | 音符、连打尾、小节线、各类事件在原文中的位置；`NoteAt(offset)` 反查 |
+| `Measures`、`Played(route)` | 小节表（时刻、BPM、拍长、格数、所属路线），某路线实际经过的小节 |
+| `StateAt(offset)` | 某位置生效的状态：时刻、BPM、SCROLL、拍长、GOGO、小节与格、分歧路线、开着的连打、下一个气球的打数 |
+| `Lines` | 偏移与行列互换（行从 1、列从 0，UTF-16） |
+
+位置都是 `TextSpan`：原文的 UTF-16 偏移（BOM 计入）。
+
 ## SongInfo 的结构
 
 | 成员 | 内容 |
