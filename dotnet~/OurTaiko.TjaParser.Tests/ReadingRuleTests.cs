@@ -32,6 +32,19 @@ public class ReadingRuleTests
     public void ADifferentDifficultyIsNotFound()
         => Assert.Throws<FormatException>(() => TjaParser.Parse("BPM:120\nCOURSE:Ura\n#START\n1,\n#END\n", "Oni"));
 
+    // As OpenTaiko reads a command name (# and capital letters), a letter right after #START makes
+    // another command; anything else after it is the player.
+    [Theory]
+    [InlineData("#STARTP1", false)]
+    [InlineData("#STARTX", false)]
+    [InlineData("#Startx", false)]
+    [InlineData("#START", true)]
+    [InlineData("#start p2", true)]
+    [InlineData("#START\tP1", true)]
+    [InlineData("#START1", true)]
+    public void StartIsACommandOfItsOwn(string line, bool start)
+        => Assert.Equal(start, TjaLines.Read(line).First().Kind == TjaLineKind.Start);
+
     // Only the BPM, OFFSET and LEVEL in force for the block played are read.
     [Theory]
     [InlineData("COURSE:Easy\nLEVEL:x\n#START\n2,\n#END\nCOURSE:Oni\nLEVEL:9\n")]

@@ -53,7 +53,7 @@
 | 状态 | 编号 | 事项 | 位置 | 做法 | 验收 | 记录 |
 |---|---|---|---|---|---|---|
 | ⬜ | P3-1 | `HasNotes` 按「有数字」判断：全 `0` 算有、只有 `G`/`C`/`F` 算没有 | `SongInfo.Read` | 按真正的音符字符判断 | `hasNotes` 可能变化，通知两站 | |
-| ⬜ | P3-2 | `#STARTxxx` 被当成块开始 | `TjaLines.Read` | `#START` 后须是空白或行尾 | 有测试 | |
+| ✅ | P3-2 | `#STARTxxx` 被当成块开始 | `TjaLines.Read` | `#START` 后须是空白或行尾 | 有测试 | 按 OpenTaiko 的指令名规则（`#` 加大写字母，见其 `CommandAndArgumentRegex`）：`#START` 后紧跟字母（不分大小写）就不是块开始；`#START1` 等仍是（之后由 SongInfo 拒绝非 P1/P2）。golden 中只有 1 份含 `#STARTE` 的变异谱改变；规范 §1.4 同步 |
 | ⬜ | P3-3 | 气球用完列表时静默取 5 | `NextBalloon` | 加警告 | 只多警告，哈希不变 | |
 | ⬜ | P3-4 | 警告不带位置 | 各处 `Warn` | 带行号 | 警告文本变化，同步两站 | |
 | ⬜ | P3-5 | `ReadCondition`、`Scroll` 依赖正则 | `TjaParser.cs` | 手写解析 | 行为不变（测试 + fuzz） | |

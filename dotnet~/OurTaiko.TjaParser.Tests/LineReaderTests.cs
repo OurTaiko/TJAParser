@@ -61,7 +61,8 @@ public class LineReaderTests
             number = n;
             string line = uncommented.Trim();
             if (line.Length == 0) continue;
-            bool start = line.StartsWith("#START", StringComparison.OrdinalIgnoreCase);
+            // Since P3-2 a letter right after #START makes another command.
+            bool start = line.StartsWith("#START", StringComparison.OrdinalIgnoreCase) && (line.Length == 6 || !char.IsAsciiLetter(line[6]));
             if (inBlock && (start || courseLine.IsMatch(line)))
             {
                 inBlock = false;
