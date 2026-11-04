@@ -5,3 +5,5 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("OurTaiko.Runtime")]
 [assembly: InternalsVisibleTo("OurTaiko.Tests")]
 [assembly: InternalsVisibleTo("OurTaiko.PlayModeTests")]
+// The dotnet test project (dotnet~/OurTaiko.TjaParser.Tests).
+[assembly: InternalsVisibleTo("OurTaiko.TjaParser.Tests")]
