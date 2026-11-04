@@ -65,6 +65,11 @@ namespace OurTaiko
         public TjaDocument WithChange(int start, int length, string text, int version)
             => WithText(Text.Substring(0, start) + text + Text.Substring(start + length), version);
 
+        List<TjaSyntaxToken> syntax;
+
+        // The whole text as syntax tokens (TjaSyntax.Tokenize), made once per version.
+        public IReadOnlyList<TjaSyntaxToken> Syntax => LazyInitializer.EnsureInitialized(ref syntax, () => TjaSyntax.Tokenize(Text));
+
         // Every #START, in file order.
         public IReadOnlyList<TjaDocumentBlock> Blocks
         {
