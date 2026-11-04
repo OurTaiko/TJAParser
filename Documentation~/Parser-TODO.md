@@ -35,7 +35,7 @@
 | ✅ | P1-5 | 警告去重 `List.Contains`，O(W²) | `Warn` 及各处 `chart.Warnings.Contains` | 统一走 `Warn`，内部配 `HashSet` | `ChartReader` 内统一走 `Warn`（`HashSet` 以已有警告为初值）；头部 BALLOON 的少量警告仍用 `Contains`；golden 不变 |
 | ✅ | P1-6 | 每小节 2–3 次 LINQ `Any` / `Count` | `Read`、`FlushCommands`、`Flush` | `pending` 入队时累计音符数 | `pendingNotes` 计数；golden 不变 |
 | ✅ | P1-7 | 块内每行跑一次 `CourseLine` 正则 | `TjaLines.Read` | 字符比较 | 首字符不是 `c`/`C` 的行不跑正则（正则本身保留，语义完全不变）；golden 不变 |
-| ⬜ | P1-8 | 6 次 `OrderBy().ToList()` 再拷回 | `ChartReader.Read` 末尾 | 通用稳定插入排序（列表几乎有序） | |
+| ✅ | P1-8 | 6 次 `OrderBy().ToList()` 再拷回 | `ChartReader.Read` 末尾 | 通用稳定插入排序（列表几乎有序） | `SortStable`：已有序（无分歧时的常见情况）则不动，否则仍用稳定的 `OrderBy`，避免手写排序在病态谱上退化；golden 不变 |
 
 ## P2：结构性优化
 

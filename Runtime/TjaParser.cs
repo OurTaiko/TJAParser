@@ -304,22 +304,28 @@ namespace OurTaiko
                 chart.Duration = Math.Max(chart.Duration, Now);
                 chart.Notes.Sort((a, b) => a.Time.CompareTo(b.Time));
                 chart.Bars.Sort((a, b) => a.Time.CompareTo(b.Time));
-                var gogos = chart.Gogos.OrderBy(g => g.Time).ToList(); // stable, unlike List.Sort
-                chart.Gogos.Clear(); chart.Gogos.AddRange(gogos);
-                var tempos = chart.Tempos.OrderBy(t => t.Time).ToList();
-                chart.Tempos.Clear(); chart.Tempos.AddRange(tempos);
-                var clocks = chart.ScrollClocks.OrderBy(c => c.Time).ToList();
-                chart.ScrollClocks.Clear(); chart.ScrollClocks.AddRange(clocks);
-                var alphas = chart.LaneAlphas.OrderBy(a => a.StartTime).ToList();
-                chart.LaneAlphas.Clear(); chart.LaneAlphas.AddRange(alphas);
-                var moves = chart.JudgeMoves.OrderBy(m => m.Time).ToList();
-                chart.JudgeMoves.Clear(); chart.JudgeMoves.AddRange(moves);
+                SortStable(chart.Gogos, g => g.Time);
+                SortStable(chart.Tempos, t => t.Time);
+                SortStable(chart.ScrollClocks, c => c.Time);
+                SortStable(chart.LaneAlphas, a => a.StartTime);
+                SortStable(chart.JudgeMoves, m => m.Time);
                 JudgeShift.Link(chart.JudgeMoves);
                 NoteMoji.Assign(chart);
             }
 
             static bool IsBranchCommand(string key)
                 => key == "#BRANCHSTART" || key == "#BRANCHEND" || key == "#N" || key == "#E" || key == "#M";
+
+            // By time, keeping source order at one time (unlike List.Sort). Without branches the
+            // events come in time order already, and are left as they are.
+            static void SortStable<T>(List<T> list, Func<T, double> time)
+            {
+                int i = 1;
+                while (i < list.Count && time(list[i - 1]).CompareTo(time(list[i])) <= 0) i++;
+                if (i >= list.Count) return;
+                var sorted = list.OrderBy(time).ToList();
+                list.Clear(); list.AddRange(sorted);
+            }
 
             void FlushCommands()
             {
