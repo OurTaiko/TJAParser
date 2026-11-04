@@ -46,7 +46,7 @@
 | ⬜ | P2-3 | `SongInfo` 与 `TjaParser` 各自解释头部 | `SongInfo.Read`、`TjaParser.Parse` | 抽出共用的头部读取（与 P0-7、P2-2 一起） | 口径一致 | |
 | ⬜ | P2-4 | token 是 `List<string>` | `NoteTokens` / `ChartReader` | struct token，音符不生成字符串，命令 key 只求一次 | 解析阶段无按音符分配 | |
 | ⬜ | P2-5 | `Command` 大 switch，参数解析分散 | `ChartReader.Command` | 按命令拆成小方法，统一「读不出则丢弃并警告」 | 纯重构 | |
-| ⬜ | P2-6 | 规范文本每个字段一个字符串（`N()`、`params string[]`）：Large 每块写规范文本分配约 4 MB，是解析本身的 2 倍（P1 后实测补入） | `ChartCanonical.Write`、`ChartHash.OfCanonical` | 数字用 `TryFormat("R")` 直接写入缓冲；SHA-256 按块增量计算，不整串转 UTF-8 | 规范文本逐字节不变，`OfFile` 分配大幅下降 | |
+| ✅ | P2-6 | 规范文本每个字段一个字符串（`N()`、`params string[]`）：Large 每块写规范文本分配约 4 MB，是解析本身的 2 倍（P1 后实测补入） | `ChartCanonical.Write`、`ChartHash.OfCanonical` | 数字用 `TryFormat("R")` 直接写入缓冲；SHA-256 按块增量计算，不整串转 UTF-8 | 规范文本逐字节不变，`OfFile` 分配大幅下降 | `Writer` 把数字用 `TryFormat` 直接写进 `StringBuilder`（不预设容量，避免大对象堆）；`OfCanonical` 用 `IncrementalHash` 按 8 KB 缓冲编码。golden 的全部哈希不变即规范文本逐字节不变；`CanonicalHashTests` 覆盖跨缓冲的代理对。OfFile：Donkama 2.67→1.79 MB、Large 35.2→18.4 MB（44→34 ms） |
 
 ## P3：小问题与整洁
 
