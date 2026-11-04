@@ -35,87 +35,7 @@ namespace OurTaiko
         // The same from the file's lines already read (TjaLines.Read of text), so that several
         // blocks of one file are parsed without reading it again (ChartHash.OfFile).
         internal static TaikoChart Parse(string text, IEnumerable<TjaLine> lines, string requestedCourse, string requestedSide)
-        {
-            if (string.IsNullOrWhiteSpace(text)) throw new FormatException("The TJA chart is empty.");
-            if (Array.IndexOf(ChartSide.All, requestedSide) < 0) throw new ArgumentException($"Unknown side '{requestedSide}'.", nameof(requestedSide));
-            var chart = new TaikoChart();
-            var tokens = new List<string>();
-            // The file line of each token, for the warnings.
-            var tokenLines = new List<int>();
-            int endLine = 0;
-            // Header warnings once each, by their text.
-            var headerWarned = new HashSet<string>();
-            // Balloon hits per route (Normal, Expert, Master); headers before any COURSE are
-            // every course's defaults, and each COURSE starts again from them.
-            var globalBalloons = NewBalloonLists();
-            var balloons = NewBalloonLists();
-            bool seenCourse = false;
-            string course = "Oni";
-            // BPM, OFFSET and LEVEL as written; only the values in force for the block played are
-            // read, so an unreadable one elsewhere in the file (another course) does not fail it.
-            string bpm = null, offset = null, level = null;
-            bool reading = false, found = false, ended = false;
-            // A scroll command after the course's COURSE: and before its #START sets how it begins.
-            ScrollMode startMode = ScrollMode.Normal;
-            // The first block of the requested course on the requested side is played.
-            foreach (var line in lines)
-            {
-                if (line.Kind == TjaLineKind.Start)
-                {
-                    reading = SameCourse(course, requestedCourse) && ChartSide.OfStart(line.Value) == requestedSide;
-                    if (reading) { found = true; chart.Course = Course(course).Split('_')[0]; chart.Level = level == null ? 0 : (int)Number(level); }
-                    continue;
-                }
-                if (line.Kind == TjaLineKind.End)
-                {
-                    if (!reading) continue;
-                    if (line.Implicit) chart.Warnings.Add(AtLine("#END missing", line.Line));
-                    endLine = line.Line;
-                    ended = true; break;
-                }
-                if (line.Kind == TjaLineKind.Body)
-                {
-                    if (!reading) continue;
-                    if (line.Text[0] == '#') tokens.Add(line.Text);
-                    else NoteTokens(line.Text, tokens);
-                    while (tokenLines.Count < tokens.Count) tokenLines.Add(line.Line);
-                    continue;
-                }
-                if (line.Kind == TjaLineKind.Other)
-                {
-                    if (seenCourse && ScrollModeOf(line.Text) is ScrollMode mode) startMode = mode;
-                    continue;
-                }
-                if (line.Kind != TjaLineKind.Header) continue;
-                string value = line.Value;
-                switch (line.Key)
-                {
-                    case "TITLE": chart.Title = value; break;
-                    case "SUBTITLE": chart.Subtitle = value.TrimStart('-', '+'); break;
-                    case "BPM": bpm = value; break;
-                    case "OFFSET": offset = value; break;
-                    case "COURSE":
-                        course = value; level = null; seenCourse = true; startMode = ScrollMode.Normal;
-                        for (int r = 0; r < 3; r++) balloons[r] = new List<int>(globalBalloons[r]);
-                        break;
-                    case "LEVEL": level = value; break;
-                    // OpenTaiko: BALLOON is the Normal route's list; each header replaces its route's list.
-                    case "BALLOON": case "BALLOONNOR": case "BALLOONEXP": case "BALLOONMAS":
-                        int route = line.Key == "BALLOONEXP" ? 1 : line.Key == "BALLOONMAS" ? 2 : 0;
-                        if (!Balloons(value, out var hits)) { if (headerWarned.Add(line.Text)) chart.Warnings.Add(AtLine(line.Text, line.Line)); break; }
-                        balloons[route] = hits;
-                        if (!seenCourse) globalBalloons[route] = new List<int>(hits);
-                        break;
-                }
-            }
-            if (!found || !ended) throw new FormatException($"No {requestedCourse} course (#START) on the {requestedSide} side.");
-            if (bpm != null) chart.Bpm = Number(bpm);
-            // OpenTaiko keeps OFFSET in whole milliseconds, cut toward zero.
-            if (offset != null) chart.Offset = (int)(Number(offset) * 1000) / 1000.0;
-            if (!(chart.Bpm > 0) || double.IsInfinity(chart.Bpm)) throw new FormatException("BPM must be positive and finite.");
-            new ChartReader(chart, balloons, startMode).Read(tokens, tokenLines, endLine);
-            return chart;
-        }
+            => new ChartParser(null).Run(text, lines, requestedCourse, requestedSide);
 
         // A warning with the file line it was met at: `… (measure n)` becomes `… (measure n, line l)`,
         // anything else gets ` (line l)`.
@@ -180,24 +100,6 @@ namespace OurTaiko
             var strings = new string[128];
             for (int c = 0; c < strings.Length; c++) strings[c] = ((char)c).ToString();
             return strings;
-        }
-
-        // A note line's tokens: one per character, spaces skipped. `[…]` (not in OpenTaiko) stays
-        // on the note before it, as in `7[10]`, and must close on the same line.
-        static void NoteTokens(string text, List<string> tokens)
-        {
-            for (int i = 0; i < text.Length; i++)
-            {
-                char c = text[i];
-                if (char.IsWhiteSpace(c)) continue;
-                if (c != '[') { tokens.Add(c < AsciiStrings.Length ? AsciiStrings[c] : c.ToString()); continue; }
-                int close = text.IndexOf(']', i);
-                if (close < 0) throw new FormatException($"Unclosed [ in: {text}");
-                if (i == 0 || tokens[tokens.Count - 1].Length != 1 || tokens[tokens.Count - 1] == ",")
-                    throw new FormatException($"[ without a note before it in: {text}");
-                tokens[tokens.Count - 1] += new string(text.Substring(i, close - i + 1).Where(ch => !char.IsWhiteSpace(ch)).ToArray());
-                i = close;
-            }
         }
 
         // Each note character's value is its index here; lower case and other symbols are -1.
@@ -271,22 +173,32 @@ namespace OurTaiko
             public TimingState Copy() => (TimingState)MemberwiseClone();
         }
 
-        sealed class ChartReader
+        // One block of a file, read in two passes: the lines up to the block's #END (headers in
+        // force, the block's tokens), then the tokens. With `sources` (TjaLines.Read with
+        // positions, for analysis) every token also gets its span in the file.
+        internal sealed class ChartParser
         {
-            readonly TaikoChart chart;
-            readonly long offsetMs;
+            readonly TaikoChart chart = new TaikoChart();
+            readonly List<LineSource> sources;
+            // The block's tokens: a command line whole, or one note character (with an inline
+            // balloon count, `7[10]`); the file line of each, and its span when tracked.
+            readonly List<string> tokens = new List<string>();
+            readonly List<int> tokenLines = new List<int>();
+            readonly List<TextSpan> tokenSpans;
+            // Where the parser is: the file line (for the warnings) and, when tracked, the span.
+            int line;
+            TextSpan span;
+            long offsetMs;
             // The cursor's time: OpenTaiko's (int)dbNowTime, shifted by OFFSET, in seconds.
             double Now => ((long)state.RawMs - offsetMs) / 1000.0;
             // Each route reads its own list in order. A common balloon takes the Normal list's
             // number (the one played on every route) and moves every route's place past it.
-            readonly List<int>[] balloons;
+            List<int>[] balloons;
             readonly int[] balloonIndex = new int[3];
-            // The measure being read: its commands and notes in order, and how many are notes.
-            readonly List<string> pending = new List<string>();
+            // The measure being read: its commands and notes (as token indices) in order, and how
+            // many are notes.
+            readonly List<int> pending = new List<int>();
             int pendingNotes;
-            readonly List<int> pendingLines = new List<int>();
-            // The file line of the token being read, for the warnings.
-            int line;
             TimingState state, branchStart;
             ChartBranch branch;
             readonly bool[] routesSeen = new bool[3];
@@ -310,13 +222,136 @@ namespace OurTaiko
             List<ChartEntry> Entries => InRoute ? routeLists[(int)route] : common;
             bool warnedCommonInBranch;
 
-            public ChartReader(TaikoChart chart, List<int>[] balloons, ScrollMode mode)
+            public ChartParser(List<LineSource> sources)
             {
-                this.chart = chart; this.balloons = balloons;
+                this.sources = sources;
+                if (sources != null) tokenSpans = new List<TextSpan>();
+            }
+
+            public TaikoChart Run(string text, IEnumerable<TjaLine> lines, string requestedCourse, string requestedSide)
+            {
+                if (string.IsNullOrWhiteSpace(text)) throw new FormatException("The TJA chart is empty.");
+                if (Array.IndexOf(ChartSide.All, requestedSide) < 0) throw new ArgumentException($"Unknown side '{requestedSide}'.", nameof(requestedSide));
+                int endLine = 0;
+                // Balloon hits per route (Normal, Expert, Master); headers before any COURSE are
+                // every course's defaults, and each COURSE starts again from them.
+                var globalBalloons = NewBalloonLists();
+                balloons = NewBalloonLists();
+                bool seenCourse = false;
+                string course = "Oni";
+                // BPM, OFFSET and LEVEL as written; only the values in force for the block played are
+                // read, so an unreadable one elsewhere in the file (another course) does not fail it.
+                string bpm = null, offset = null, level = null;
+                bool reading = false, found = false, ended = false;
+                // A scroll command after the course's COURSE: and before its #START sets how it begins.
+                ScrollMode startMode = ScrollMode.Normal;
+                int index = -1;
+                // The first block of the requested course on the requested side is played.
+                foreach (var line in lines)
+                {
+                    index++;
+                    this.line = line.Line;
+                    if (line.Kind == TjaLineKind.Start)
+                    {
+                        reading = SameCourse(course, requestedCourse) && ChartSide.OfStart(line.Value) == requestedSide;
+                        if (reading) { found = true; chart.Course = Course(course).Split('_')[0]; chart.Level = level == null ? 0 : (int)Number(level); }
+                        continue;
+                    }
+                    if (line.Kind == TjaLineKind.End)
+                    {
+                        if (!reading) continue;
+                        if (line.Implicit) Warn("#END missing");
+                        endLine = line.Line;
+                        ended = true; break;
+                    }
+                    if (line.Kind == TjaLineKind.Body)
+                    {
+                        if (!reading) continue;
+                        if (line.Text[0] == '#') AddToken(line.Text, line.Line, sources == null ? default : sources[index].Span(0, line.Text.Length));
+                        else NoteTokens(line, index);
+                        continue;
+                    }
+                    if (line.Kind == TjaLineKind.Other)
+                    {
+                        if (seenCourse && ScrollModeOf(line.Text) is ScrollMode mode) startMode = mode;
+                        continue;
+                    }
+                    if (line.Kind != TjaLineKind.Header) continue;
+                    string value = line.Value;
+                    switch (line.Key)
+                    {
+                        case "TITLE": chart.Title = value; break;
+                        case "SUBTITLE": chart.Subtitle = value.TrimStart('-', '+'); break;
+                        case "BPM": bpm = value; break;
+                        case "OFFSET": offset = value; break;
+                        case "COURSE":
+                            course = value; level = null; seenCourse = true; startMode = ScrollMode.Normal;
+                            for (int r = 0; r < 3; r++) balloons[r] = new List<int>(globalBalloons[r]);
+                            break;
+                        case "LEVEL": level = value; break;
+                        // OpenTaiko: BALLOON is the Normal route's list; each header replaces its route's list.
+                        case "BALLOON": case "BALLOONNOR": case "BALLOONEXP": case "BALLOONMAS":
+                            int route = line.Key == "BALLOONEXP" ? 1 : line.Key == "BALLOONMAS" ? 2 : 0;
+                            if (!Balloons(value, out var hits)) { Warn(line.Text); break; }
+                            balloons[route] = hits;
+                            if (!seenCourse) globalBalloons[route] = new List<int>(hits);
+                            break;
+                    }
+                }
+                if (!found || !ended) throw new FormatException($"No {requestedCourse} course (#START) on the {requestedSide} side.");
+                if (bpm != null) chart.Bpm = Number(bpm);
+                // OpenTaiko keeps OFFSET in whole milliseconds, cut toward zero.
+                if (offset != null) chart.Offset = (int)(Number(offset) * 1000) / 1000.0;
+                if (!(chart.Bpm > 0) || double.IsInfinity(chart.Bpm)) throw new FormatException("BPM must be positive and finite.");
+
                 offsetMs = (long)Math.Round(chart.Offset * 1000);
-                state = new TimingState { Bpm = chart.Bpm, Mode = mode };
+                state = new TimingState { Bpm = chart.Bpm, Mode = startMode };
                 chart.NoteLists.Add(common);
                 AddClockPoint();
+                Read(endLine);
+                return chart;
+            }
+
+            internal IReadOnlyList<string> Tokens => tokens;
+            internal IReadOnlyList<int> TokenLines => tokenLines;
+            internal IReadOnlyList<TextSpan> TokenSpans => tokenSpans;
+
+            void AddToken(string token, int line, TextSpan span)
+            {
+                tokens.Add(token);
+                tokenLines.Add(line);
+                tokenSpans?.Add(span);
+            }
+
+            // A note line's tokens: one per character, spaces skipped. `[…]` (not in OpenTaiko) stays
+            // on the note before it, as in `7[10]`, and must close on the same line.
+            void NoteTokens(TjaLine line, int index)
+            {
+                string text = line.Text;
+                for (int i = 0; i < text.Length; i++)
+                {
+                    char c = text[i];
+                    if (char.IsWhiteSpace(c)) continue;
+                    if (c != '[')
+                    {
+                        AddToken(c < AsciiStrings.Length ? AsciiStrings[c] : c.ToString(), line.Line, sources == null ? default : sources[index].Span(i, i + 1));
+                        continue;
+                    }
+                    int close = text.IndexOf(']', i);
+                    if (close < 0) throw new FormatException($"Unclosed [ in: {text}");
+                    if (i == 0 || tokens[tokens.Count - 1].Length != 1 || tokens[tokens.Count - 1] == ",")
+                        throw new FormatException($"[ without a note before it in: {text}");
+                    tokens[tokens.Count - 1] += new string(text.Substring(i, close - i + 1).Where(ch => !char.IsWhiteSpace(ch)).ToArray());
+                    if (tokenSpans != null) tokenSpans[tokenSpans.Count - 1] = TextSpan.FromBounds(tokenSpans[tokenSpans.Count - 1].Start, sources[index].SourceOffset(close) + 1);
+                    i = close;
+                }
+            }
+
+            // Where token t is.
+            void At(int t)
+            {
+                line = tokenLines[t];
+                if (tokenSpans != null) span = tokenSpans[t];
             }
 
             // A BPM point of the beat clock where the cursor is, on the current route or, outside a
@@ -324,12 +359,12 @@ namespace OurTaiko
             void AddClockPoint() => chart.ScrollClocks.Add(new ChartClockPoint { Time = Now, RawMs = state.RawMs, Clock = state.Clock16 / 16,
                 Bpm = state.Bpm, BranchId = branch != null && hasRoute ? branch.Id : -1, Route = route });
 
-            public void Read(List<string> tokens, List<int> tokenLines, int endLine)
+            void Read(int endLine)
             {
                 for (int t = 0; t < tokens.Count; t++)
                 {
                     string token = tokens[t];
-                    line = tokenLines[t];
+                    At(t);
                     if (token == ",") Flush();
                     else if (token[0] == '#' && IsBranchCommand(CommandKey(token)))
                     {
@@ -338,8 +373,7 @@ namespace OurTaiko
                     }
                     else
                     {
-                        pending.Add(token);
-                        pendingLines.Add(line);
+                        pending.Add(t);
                         if (token[0] != '#') pendingNotes++;
                     }
                 }
@@ -381,11 +415,10 @@ namespace OurTaiko
                 if (pendingNotes > 0) throw new FormatException("A measure is missing its comma before a branch boundary.");
                 for (int i = 0; i < pending.Count; i++)
                 {
-                    line = pendingLines[i];
-                    Command(pending[i]);
+                    At(pending[i]);
+                    Command(tokens[pending[i]]);
                 }
                 pending.Clear();
-                pendingLines.Clear();
             }
 
             // The routes being written: the current one, or all three outside a route.
@@ -706,11 +739,12 @@ namespace OurTaiko
             void Flush()
             {
                 int slots = pendingNotes, index = 0, commaLine = line;
+                var commaSpan = span;
                 bool addedBar = false;
                 for (int i = 0; i < pending.Count; i++)
                 {
-                    string token = pending[i];
-                    line = pendingLines[i];
+                    string token = tokens[pending[i]];
+                    At(pending[i]);
                     if (token[0] == '#') { Command(token); continue; }
                     if (!addedBar)
                     {
@@ -772,7 +806,7 @@ namespace OurTaiko
                 }
                 if (index == 0)
                 {
-                    line = commaLine;
+                    line = commaLine; span = commaSpan;
                     AddBar();
                     state.RawMs += 15000.0 / state.Bpm * state.Measure * 16.0;
                     state.Beat += 4 * state.Measure;
@@ -781,7 +815,6 @@ namespace OurTaiko
                 chart.Duration = Math.Max(chart.Duration, Now);
                 measure++;
                 pending.Clear();
-                pendingLines.Clear();
                 pendingNotes = 0;
             }
         }
