@@ -17,7 +17,7 @@
 |---|---|---|---|---|---|---|
 | ✅ | P0-1 | 基准测试工程 | 新建 `dotnet~/OurTaiko.TjaParser.Benchmarks` | BenchmarkDotNet 测 `SongInfo.Read`、`TjaParser.Parse`、`ChartHash.OfFile`；fixture 加大型分歧谱 | 输出耗时与分配字节数，基线记入本文末 | `cd dotnet~/OurTaiko.TjaParser.Benchmarks && dotnet run -c Release`；大型谱由 `dotnet~/Corpus/ChartCorpus.cs` 生成 |
 | ✅ | P0-2 | 差分测试 | 测试工程 | 新旧版本对同一批谱面比较 `hash`、`warnings`、`error`；仓库内用 fixture 与生成谱，两站全量谱库用 CLI `inspect` 输出逐字比对 | 之后每项优化都跑 | `GoldenTests`：644 份谱（fixture、生成谱、变异谱）的完整解析结果摘要钉在 `Fixtures/corpus.golden`，有意改变行为时用 `TJA_UPDATE_GOLDEN=1` 重新生成；全量谱库用 `dotnet~/tools/diff-corpus.sh <基线ref> <谱面目录>` |
-| ⬜ | P0-3 | Fuzz 测试 | 测试工程 | 随机输入与随机变异谱面，断言只抛 `FormatException` / `NotSupportedException` | 能复现 P0-4 | |
+| ✅ | P0-3 | Fuzz 测试 | 测试工程 | 随机输入与随机变异谱面，断言只抛 `FormatException` / `NotSupportedException` | 能复现 P0-4 | `FuzzTests`：3000 份变异谱；修复前只发现 P0-4 的 `IndexOutOfRangeException`，修复后通过 |
 | ✅ | P0-4 | `#MEASURE 4` 抛 `IndexOutOfRangeException` | `TjaParser.cs` `#MEASURE` | 缺 `/` 时抛 `FormatException` 并说明 | 有测试；规范 §14.2 删去 | 消息 `Invalid MEASURE (a/b): …`；golden 中只有 3 份含 `#MEASURE 4` 的变异谱改变 |
 | ⬜ | P0-5 | CLI `hash` 遇到被拒绝的文件时崩溃（退出码 134） | `Program.cs` `hash` | 与 `inspect` 一样捕获，返回 4 | 有测试；规范 §14.3 删去 | |
 | ⬜ | P0-6 | `Parse` 的 COURSE 匹配不把 `Ura` 视为 `Edit` | `TjaParser.cs` `Course` / `SameCourse` | 两边都经 `SongInfo.DifficultyOf` 归一再比较 | 传 `"Edit"` 能读到 `COURSE:Ura` 的块；`SongInfo.Blocks` 路径结果不变 | |
