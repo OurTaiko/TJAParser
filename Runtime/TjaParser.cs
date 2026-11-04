@@ -44,7 +44,7 @@ namespace OurTaiko
         {
             var analysis = new TjaAnalysis(text, requestedCourse, requestedSide);
             var sources = new List<LineSource>();
-            var parser = new ChartParser(sources, analysis.diagnostics);
+            var parser = new ChartParser(sources, analysis.diagnostics, analysis.SourceMap);
             analysis.Chart = parser.Run(text, TjaLines.Read(text ?? "", sources), requestedCourse, requestedSide);
             return analysis;
         }
@@ -202,6 +202,8 @@ namespace OurTaiko
             TextSpan span;
             // Every problem where it is, for an analysis; null when parsing for play.
             readonly List<TjaDiagnostic> diagnostics;
+            // Where each note, bar and event comes from, for an analysis.
+            readonly ChartSourceMap map;
             long offsetMs;
             // The cursor's time: OpenTaiko's (int)dbNowTime, shifted by OFFSET, in seconds.
             double Now => ((long)state.RawMs - offsetMs) / 1000.0;
@@ -236,10 +238,11 @@ namespace OurTaiko
             List<ChartEntry> Entries => InRoute ? routeLists[(int)route] : common;
             bool warnedCommonInBranch;
 
-            public ChartParser(List<LineSource> sources, List<TjaDiagnostic> diagnostics = null)
+            public ChartParser(List<LineSource> sources, List<TjaDiagnostic> diagnostics = null, ChartSourceMap map = null)
             {
                 this.sources = sources;
                 this.diagnostics = diagnostics;
+                this.map = map;
                 if (sources != null) tokenSpans = new List<TextSpan>();
             }
 
@@ -491,7 +494,7 @@ namespace OurTaiko
                     }
                 }
                 // OpenTaiko reads notes after the last comma as a measure of their own.
-                if (pendingNotes > 0) { Warn(TjaDiagnosticKind.LastMeasureWithoutComma); Flush(); }
+                if (pendingNotes > 0) { Warn(TjaDiagnosticKind.LastMeasureWithoutComma); Flush(atComma: false); }
                 else FlushCommands();
                 line = endLine; span = endSpan;
                 if (branch != null) EndBranch(); // #BRANCHEND is optional before #END / the next branch.
@@ -529,7 +532,7 @@ namespace OurTaiko
                 {
                     // Recovery: the notes before the branch boundary are a measure of their own.
                     Error(TjaDiagnosticKind.MissingCommaBeforeBranch);
-                    Flush();
+                    Flush(atComma: false);
                     return;
                 }
                 for (int i = 0; i < pending.Count; i++)
@@ -578,6 +581,7 @@ namespace OurTaiko
                 for (int r = FirstRoute, last = LastRoute; r <= last; r++)
                     if (openRoll[r] == note) { openRoll[r] = null; rollEndAfterBar[r] = Math.Max(rollEndAfterBar[r] ?? Now, Now); }
                 entries.Add(new ChartEntry(note, true));
+                map?.AddTail(note, span);
             }
 
             void EndBranch()
@@ -603,6 +607,7 @@ namespace OurTaiko
                 ReadCondition(branch, arg);
                 branch.DecisionTime = JudgeTime(branch.Condition == BranchCondition.Drumroll || branch.Condition == BranchCondition.BalloonHits);
                 chart.Branches.Add(branch);
+                map?.Add(branch, span);
                 routeLists = new[] { new List<ChartEntry>(), new List<ChartEntry>(), new List<ChartEntry>() };
                 chart.NoteLists.AddRange(routeLists);
                 Array.Clear(routesSeen, 0, routesSeen.Length);
@@ -696,10 +701,12 @@ namespace OurTaiko
 
             void SetGogo(bool on)
             {
-                chart.Gogos.Add(new ChartGogo { Time = Now, On = on, BranchId = BranchId, Route = route });
+                var gogo = new ChartGogo { Time = Now, On = on, BranchId = BranchId, Route = route };
+                chart.Gogos.Add(gogo);
+                map?.Add(gogo, span);
             }
 
-            void AddBar()
+            ChartNote AddBar()
             {
                 if (branch != null && !hasRoute && !warnedCommonInBranch)
                 {
@@ -715,6 +722,7 @@ namespace OurTaiko
                 branchBar = false;
                 Track(lastBar, Now);
                 Track(rollEndAfterBar, null);
+                return bar;
             }
 
             // One command. Those that set a number the chart cannot be read without (BPMCHANGE,
@@ -742,7 +750,7 @@ namespace OurTaiko
                     case "#N": SelectRoute(BranchRoute.Normal); break;
                     case "#E": SelectRoute(BranchRoute.Expert); break;
                     case "#M": SelectRoute(BranchRoute.Master); break;
-                    case "#SECTION": chart.Sections.Add(new ChartSection { Time = Now, BranchId = BranchId, Route = route }); break;
+                    case "#SECTION": Section(); break;
                     case "#LEVELHOLD": LevelHold(); break;
                     case "#NMSCROLL": case "#BMSCROLL": case "#HBSCROLL": state.Mode = ScrollModeOf(key).Value; break;
                     case "#JPOSSCROLL": read = JposScroll(arg); break;
@@ -759,9 +767,17 @@ namespace OurTaiko
                 if (!ReadNumber(arg, out double bpm)) return;
                 if (!(bpm > 0) || double.IsInfinity(bpm)) { Error(TjaDiagnosticKind.InvalidBpmChange); return; }
                 state.Bpm = bpm;
-                chart.Tempos.Add(new ChartTempo { Time = Now, ResumeTime = Now, Beat = state.Beat, Bpm = state.Bpm,
-                    BranchId = BranchId, Route = route });
+                var tempo = new ChartTempo { Time = Now, ResumeTime = Now, Beat = state.Beat, Bpm = state.Bpm, BranchId = BranchId, Route = route };
+                chart.Tempos.Add(tempo);
+                map?.Add(tempo, span);
                 AddClockPoint();
+            }
+
+            void Section()
+            {
+                var section = new ChartSection { Time = Now, BranchId = BranchId, Route = route };
+                chart.Sections.Add(section);
+                map?.Add(section, span);
             }
 
             // OpenTaiko keeps the two numbers as floats and divides them as floats.
@@ -788,8 +804,9 @@ namespace OurTaiko
                 if (!TjaNumber.TryParse(arg, out double delay) || double.IsNaN(delay) || double.IsInfinity(delay)) return false;
                 double start = Now;
                 state.RawMs += delay * 1000;
-                chart.Tempos.Add(new ChartTempo { Time = start, ResumeTime = Now,
-                    Beat = state.Beat, Bpm = state.Bpm, BranchId = BranchId, Route = route });
+                var tempo = new ChartTempo { Time = start, ResumeTime = Now, Beat = state.Beat, Bpm = state.Bpm, BranchId = BranchId, Route = route };
+                chart.Tempos.Add(tempo);
+                map?.Add(tempo, span);
                 // The beat clock keeps running through a delay (OpenTaiko dbNowBMScollTime).
                 state.Clock16 += delay * 1000 * state.Bpm / 15000;
                 return true;
@@ -815,7 +832,9 @@ namespace OurTaiko
                     || jpos.Length >= 3 && !int.TryParse(jpos[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out direction))
                     return false;
                 if (direction == 0) { x = -x; y = -y; }
-                chart.JudgeMoves.Add(new ChartJudgeMove { Time = Now, Duration = Math.Max(0, 1000 * seconds), MoveX = x, MoveY = y });
+                var judgeMove = new ChartJudgeMove { Time = Now, Duration = Math.Max(0, 1000 * seconds), MoveX = x, MoveY = y };
+                chart.JudgeMoves.Add(judgeMove);
+                map?.Add(judgeMove, span);
                 return true;
             }
 
@@ -852,14 +871,19 @@ namespace OurTaiko
                 if (InRoute && alpha.StartTime < branch.DecisionTime)
                     Warn(TjaDiagnosticKind.LaneAlphaBeforeDecision, branch.Id, command);
                 chart.LaneAlphas.Add(alpha);
+                map?.Add(alpha, span);
                 return true;
             }
 
-            void Flush()
+            // The measure waiting: its commands and notes, at the comma (or, without one, where it
+            // ends). A bar line's source is its measure, from its first note to its comma.
+            void Flush(bool atComma = true)
             {
                 int slots = pendingNotes, index = 0, commaLine = line;
                 var commaSpan = span;
                 bool addedBar = false;
+                ChartNote bar = null;
+                int barStart = 0;
                 for (int i = 0; i < pending.Count; i++)
                 {
                     string token = tokens[pending[i]];
@@ -867,7 +891,8 @@ namespace OurTaiko
                     if (token[0] == '#') { Command(token); continue; }
                     if (!addedBar)
                     {
-                        AddBar();
+                        bar = AddBar();
+                        barStart = span.Start;
                         addedBar = true;
                     }
                     // A note character is its NoteKind in base 36 (G is 16), upper case only as in OpenTaiko;
@@ -924,6 +949,7 @@ namespace OurTaiko
                             else if (!listed) Warn(TjaDiagnosticKind.BalloonWithoutCount, BalloonHeaders[list], measure);
                         }
                         chart.Notes.Add(note);
+                        map?.AddNote(note, span);
                         Entries.Add(new ChartEntry(note, false));
                         if (note.IsLong) for (int r = FirstRoute, last = LastRoute; r <= last; r++) openRoll[r] = note;
                     }
@@ -936,12 +962,14 @@ namespace OurTaiko
                 if (index == 0)
                 {
                     line = commaLine; span = commaSpan;
-                    AddBar();
+                    bar = AddBar();
+                    barStart = span.Start;
                     state.RawMs += 15000.0 / state.Bpm * state.Measure * 16.0;
                     state.Beat += 4 * state.Measure;
                     state.Clock16 += state.Measure * 16.0;
                 }
                 chart.Duration = Math.Max(chart.Duration, Now);
+                map?.Add(bar, TextSpan.FromBounds(barStart, atComma ? commaSpan.End : span.End));
                 measure++;
                 pending.Clear();
                 pendingNotes = 0;
