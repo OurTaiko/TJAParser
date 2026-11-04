@@ -44,6 +44,12 @@ namespace OurTaiko
         // case), so the regex runs for those alone and not for every note line of a block.
         static bool IsCourseLine(string line) => (line[0] == 'C' || line[0] == 'c') && CourseLine.IsMatch(line);
 
+        // `#START` in any case, then anything but a letter: OpenTaiko reads a command's name as `#`
+        // and the capital letters after it, so `#STARTP1` is another command, not a #START.
+        static bool IsStart(string line)
+            => line.StartsWith("#START", StringComparison.OrdinalIgnoreCase)
+                && (line.Length == 6 || !(line[6] >= 'A' && line[6] <= 'Z' || line[6] >= 'a' && line[6] <= 'z'));
+
         public static IEnumerable<TjaLine> Read(string text)
         {
             bool inBlock = false;
@@ -53,7 +59,7 @@ namespace OurTaiko
             {
                 number = lines.Number;
                 if (line.Length == 0) continue;
-                bool start = line.StartsWith("#START", StringComparison.OrdinalIgnoreCase);
+                bool start = IsStart(line);
                 if (inBlock && (start || IsCourseLine(line)))
                 {
                     inBlock = false;
