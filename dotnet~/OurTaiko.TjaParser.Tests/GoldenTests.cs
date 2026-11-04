@@ -53,6 +53,29 @@ public class GoldenTests
             + string.Join(", ", changed.Take(20)));
     }
 
+    // OfFile reads the file's lines once for all its blocks; it must give what parsing each block
+    // from the text gives (OfBlock, the path the digests above pin through TjaParser.Parse).
+    [Fact]
+    public void OfFileGivesWhatEachBlockGivesAlone()
+    {
+        foreach (var (name, text) in Corpus())
+        {
+            SongInfo info;
+            try { info = SongInfo.Read(text); }
+            catch (FormatException e)
+            {
+                Assert.Equal(e.Message, Assert.Throws<FormatException>(() => ChartHash.OfFile(text)).Message);
+                continue;
+            }
+            var alone = info.Blocks.Select(b => Show(ChartHash.OfBlock(text, b))).ToList();
+            Assert.True(alone.SequenceEqual(ChartHash.OfFile(text).Select(Show)), name);
+            Assert.True(alone.SequenceEqual(ChartHash.OfFile(text, info).Select(Show)), name);
+        }
+    }
+
+    static string Show(ChartBlockHash h)
+        => $"{h.Difficulty} {h.Course} {h.Side} {h.Level} {h.IsBranching} {h.Hash} {h.Error} {string.Join("|", h.Warnings)} {h.Chart != null}";
+
     static string Digest(string text)
         => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant().Substring(0, 32);
 
