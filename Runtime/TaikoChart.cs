@@ -141,6 +141,8 @@ namespace OurTaiko
         // Sorted by time; events at the same time keep their source order.
         public readonly List<ChartGogo> Gogos = new List<ChartGogo>();
         public readonly List<ChartTempo> Tempos = new List<ChartTempo>();
+        // #LANE_ALPHA fades of the lane background, by StartTime (LaneAlpha.At reads them).
+        public readonly List<ChartLaneAlpha> LaneAlphas = new List<ChartLaneAlpha>();
         // OurTaikoPlayer's NoteLists: the common part, then one per route of each branch,
         // each with its bar lines and long-note tails in place.
         public readonly List<List<ChartEntry>> NoteLists = new List<List<ChartEntry>>();

@@ -264,6 +264,8 @@ namespace OurTaiko
                 chart.Tempos.Clear(); chart.Tempos.AddRange(tempos);
                 var clocks = chart.ScrollClocks.OrderBy(c => c.Time).ToList();
                 chart.ScrollClocks.Clear(); chart.ScrollClocks.AddRange(clocks);
+                var alphas = chart.LaneAlphas.OrderBy(a => a.StartTime).ToList();
+                chart.LaneAlphas.Clear(); chart.LaneAlphas.AddRange(alphas);
                 var moves = chart.JudgeMoves.OrderBy(m => m.Time).ToList();
                 chart.JudgeMoves.Clear(); chart.JudgeMoves.AddRange(moves);
                 JudgeShift.Link(chart.JudgeMoves);
@@ -526,8 +528,35 @@ namespace OurTaiko
                         state.SuddenShow = Math.Abs(Math.Truncate(show * 1000)) >= 1 ? show : double.PositiveInfinity;
                         state.SuddenMove = Math.Abs(Math.Truncate(move * 1000)) >= 1 ? Math.Truncate(move * 1000) / 1000 : double.PositiveInfinity;
                         break;
+                    case "#LANE_ALPHA": LaneAlphaCommand(command, arg); break;
                     default: if (!chart.Warnings.Contains(key)) chart.Warnings.Add(key); break;
                 }
+            }
+
+            // OurTaiko (not in OpenTaiko): `#LANE_ALPHA target[%] [ms]`. target is the lane
+            // background's opacity, 0–100 percent; ms (default 0, cut to whole milliseconds) fades
+            // from here for that long, or with a negative value fades from that long before up to
+            // here. Anything else (missing, unreadable or out-of-range numbers, a third argument)
+            // drops the command with a warning, as SCROLL is.
+            void LaneAlphaCommand(string command, string arg)
+            {
+                var args = arg.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                double ms = 0;
+                if (args.Length < 1 || args.Length > 2
+                    || !TjaNumber.TryParse(args[0].EndsWith("%") ? args[0].Substring(0, args[0].Length - 1) : args[0], out double percent)
+                    || !(percent >= 0 && percent <= 100)
+                    || args.Length == 2 && (!TjaNumber.TryParse(args[1], out ms) || double.IsNaN(ms) || double.IsInfinity(ms)))
+                {
+                    Warn(command);
+                    return;
+                }
+                double fade = Math.Truncate(ms) / 1000;
+                var alpha = new ChartLaneAlpha { Time = Now, StartTime = Math.Min(Now, Now + fade), EndTime = Math.Max(Now, Now + fade),
+                    Alpha = percent / 100, BranchId = BranchId, Route = route };
+                // The game knows a route only once the branch is decided.
+                if (InRoute && alpha.StartTime < branch.DecisionTime)
+                    Warn($"#LANE_ALPHA on a route starts before branch {branch.Id} is decided: {command}");
+                chart.LaneAlphas.Add(alpha);
             }
 
             void Flush()
