@@ -22,7 +22,7 @@
 | ✅ | P0-5 | CLI `hash` 遇到被拒绝的文件时崩溃（退出码 134） | `Program.cs` `hash` | 与 `inspect` 一样捕获，返回 4 | 有测试；规范 §14.3 删去 | `CliTests` 经入口点调用命令；README 退出码说明同步 |
 | ✅ | P0-6 | `Parse` 的 COURSE 匹配不把 `Ura` 视为 `Edit` | `TjaParser.cs` `Course` / `SameCourse` | 两边都经 `SongInfo.DifficultyOf` 归一再比较 | 传 `"Edit"` 能读到 `COURSE:Ura` 的块；`SongInfo.Blocks` 路径结果不变 | golden 中只有 5 份被 SongInfo 拒绝、含 `COURSE:Ura` 的变异谱改变（测试对它们直接按难度名解析） |
 | ✅ | P0-7 | 别的难度里读不出的 `LEVEL`／`BPM`／`OFFSET` 让当前块失败 | `TjaParser.cs` 头部 switch | 与 `SongInfo` 统一：只有当前块生效的值读不出才报错 | 原本失败的块得到新哈希，已有哈希不变 | golden 中只有 1 份变异谱改变（第一个 COURSE 前的 `LEVEL:x` 不再使各块失败）；规范 §2.2、§14.1 同步 |
-| ⬜ | P0-8 | README「每个难度每个侧别只取第一块」与代码不符 | `README.md` | 改为「重复的难度与侧别拒绝整个文件」 | 规范 §14.5 删去 | |
+| ✅ | P0-8 | README「每个难度每个侧别只取第一块」与代码不符 | `README.md` | 改为「重复的难度与侧别拒绝整个文件」 | 规范 §14.5 删去 | README 同时更正了「按难度排序」「未知 COURSE 的块不列出」两处（实际为文件顺序、整个文件被拒绝）；`ChartHash.OfFile` 注释同步 |
 
 ## P1：热路径零风险优化
 

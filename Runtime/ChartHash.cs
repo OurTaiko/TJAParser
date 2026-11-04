@@ -43,8 +43,8 @@ namespace OurTaiko
             return sb.ToString();
         }
 
-        // Every block the game can list (SongInfo.Blocks: the first block of each difficulty on
-        // each side, in that order), each parsed as the game plays it.
+        // Every block the game can list (SongInfo.Blocks: every #START, in file order; a file with
+        // a difficulty and side written twice is refused), each parsed as the game plays it.
         public static List<ChartBlockHash> OfFile(string text) => OfFile(text, SongInfo.Read(text));
 
         public static List<ChartBlockHash> OfFile(string text, SongInfo info)

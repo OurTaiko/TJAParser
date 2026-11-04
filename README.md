@@ -70,7 +70,7 @@ tjaparser version                             算法版本，如 v1
   {"course":"Edit","side":"p1","level":10,"branching":true,"error":"Long note is missing its 8 tail …"}]}
 ```
 
-块的列表与顺序和 `SongInfo.Blocks` 一致：每个难度每个侧别只取文件里第一块，按难度、再按 single/p1/p2 排序；`COURSE:3`、`COURSE:Ura` 等写法归一为 `Oni`、`Edit`；未知 COURSE 的块游戏列不出，也不在列表里。
+块的列表与顺序和 `SongInfo.Blocks` 一致：文件里每个 `#START`，按文件顺序；`COURSE:3`、`COURSE:Ura` 等写法归一为 `Oni`、`Edit`。同一难度同一侧别写了两次、或有不认识的 COURSE，整个文件被拒绝（退出码 4），不会只取其中一块。
 
 发布到服务器：
 
