@@ -93,6 +93,8 @@ cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # �
 
 位置都是 `TextSpan`：原文的 UTF-16 偏移（BOM 计入）。
 
+编辑器里文本一直在变，用 `TjaDocument`：`new TjaDocument(text)`，每次修改用 `WithText(text, version)` 或 `WithChange(start, length, text, version)` 得到新快照，`Analyze(course, side)` 按需分析某一块，`Blocks` 列出每个 `#START`。改动没碰到的块（它的行与它之前的每个头部行都没变、只是整体挪动）不重读，而是把上一版的分析移到新位置，结果与重新分析完全相同。
+
 ## SongInfo 的结构
 
 | 成员 | 内容 |

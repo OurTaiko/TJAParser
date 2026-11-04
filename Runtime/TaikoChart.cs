@@ -147,5 +147,17 @@ namespace OurTaiko
         // each with its bar lines and long-note tails in place.
         public readonly List<List<ChartEntry>> NoteLists = new List<List<ChartEntry>>();
         public readonly List<string> Warnings = new List<string>();
+
+        // The same chart (the same notes, bars and events) with other warnings: an analysis moved
+        // to where its block now stands in an edited text (TjaDocument).
+        internal TaikoChart WithWarnings(IEnumerable<string> warnings)
+        {
+            var copy = new TaikoChart { Title = Title, Subtitle = Subtitle, Course = Course, Level = Level, Bpm = Bpm, Offset = Offset, Duration = Duration };
+            copy.Notes.AddRange(Notes); copy.Bars.AddRange(Bars); copy.Branches.AddRange(Branches); copy.Sections.AddRange(Sections);
+            copy.ScrollClocks.AddRange(ScrollClocks); copy.JudgeMoves.AddRange(JudgeMoves); copy.LevelHolds.AddRange(LevelHolds);
+            copy.Gogos.AddRange(Gogos); copy.Tempos.AddRange(Tempos); copy.LaneAlphas.AddRange(LaneAlphas); copy.NoteLists.AddRange(NoteLists);
+            copy.Warnings.AddRange(warnings);
+            return copy;
+        }
     }
 }

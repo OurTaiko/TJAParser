@@ -18,7 +18,7 @@ namespace OurTaiko
         public bool HasErrors => diagnostics.Exists(d => d.Severity == TjaSeverity.Error);
 
         // Where each note, bar line and event of Chart is written.
-        public ChartSourceMap SourceMap { get; } = new ChartSourceMap();
+        public ChartSourceMap SourceMap { get; internal set; } = new ChartSourceMap();
 
         // The block's #START line, and where it ends (its #END, or where a missing #END would be).
         public TextSpan StartSpan { get; internal set; }
@@ -59,6 +59,9 @@ namespace OurTaiko
         public TjaSourceText Lines => lines ?? (lines = new TjaSourceText(Text));
 
         internal readonly List<TjaDiagnostic> diagnostics = new List<TjaDiagnostic>();
+        // The lines read, up to the block's end, and where its #START is among them (TjaDocument).
+        internal List<TjaLine> ReadLines;
+        internal int StartLineIndex = -1;
 
         internal TjaAnalysis(string text, string course, string side)
         {
