@@ -135,7 +135,7 @@ sealed class LspClient : IAsyncDisposable
 public class LanguageServerTests
 {
     const string Uri = "file:///song.tja";
-    const string Text = "BPM:120\nCOURSE:Oni\n#START\n#SCROLL abc\n1H10,\n#END\n";
+    const string Text = "BPM:120\nCOURSE:Oni\nLEVEL:9\n#START\n#SCROLL abc\n1H10,\n#END\n";
 
     static string Summary(JsonArray diagnostics) => string.Join("; ", diagnostics.Select(d =>
         $"{d["code"]} {d["severity"]} {d["range"]["start"]["line"]}:{d["range"]["start"]["character"]}-{d["range"]["end"]["line"]}:{d["range"]["end"]["character"]}"));
@@ -149,13 +149,13 @@ public class LanguageServerTests
         await client.Notify("initialized", new JsonObject());
 
         await client.Notify("textDocument/didOpen", LspClient.Open(Uri, Text));
-        // The dropped #SCROLL (a warning) on line 3, the unknown note H (an error) on line 4.
-        Assert.Equal("TJA2010 2 3:0-3:11; TJA1008 1 4:1-4:2", Summary(await client.Diagnostics(Uri, 1)));
+        // The dropped #SCROLL (a warning) on line 4, the unknown note H (an error) on line 5.
+        Assert.Equal("TJA2010 2 4:0-4:11; TJA1008 1 5:1-5:2", Summary(await client.Diagnostics(Uri, 1)));
 
         // An edit: `#FOO` before the note line, and the H made a 2.
-        await client.Notify("textDocument/didChange", LspClient.Change(Uri, 2, 4, 0, 4, 0, "#FOO\n"));
-        await client.Notify("textDocument/didChange", LspClient.Change(Uri, 3, 5, 1, 5, 2, "2"));
-        Assert.Equal("TJA2010 2 3:0-3:11; TJA2009 2 4:0-4:4", Summary(await client.Diagnostics(Uri, 3)));
+        await client.Notify("textDocument/didChange", LspClient.Change(Uri, 2, 5, 0, 5, 0, "#FOO\n"));
+        await client.Notify("textDocument/didChange", LspClient.Change(Uri, 3, 6, 1, 6, 2, "2"));
+        Assert.Equal("TJA2010 2 4:0-4:11; TJA2009 2 5:0-5:4", Summary(await client.Diagnostics(Uri, 3)));
 
         Assert.Null((await client.Request("shutdown"))["result"]);
         Assert.Equal(0, await client.Exit());
@@ -179,7 +179,7 @@ public class LanguageServerTests
         await using var client = LspClient.StartInProcess();
         await client.Request("initialize", LspClient.Initialize(debounceMs: 100));
         await client.Notify("textDocument/didOpen", LspClient.Open(Uri, Text));
-        for (int v = 2; v <= 6; v++) await client.Notify("textDocument/didChange", LspClient.Change(Uri, v, 4, 0, 4, 0, "1"));
+        for (int v = 2; v <= 6; v++) await client.Notify("textDocument/didChange", LspClient.Change(Uri, v, 5, 0, 5, 0, "1"));
         var last = await client.Diagnostics(Uri, 6);
         Assert.Contains("TJA1008", Summary(last));
         // Versions 1 to 5 were superseded within the wait: none of them was published.
@@ -215,7 +215,7 @@ public class LanguageServerTests
     [Fact]
     public void ADocumentsDiagnosticsAreEachBlocksOnce()
     {
-        var document = new TjaDocument("BPM:x\nCOURSE:Easy\n#START\n1,\n#END\nCOURSE:Oni\n#START\n#FOO\n1,\n#END\n");
-        Assert.Equal(new[] { "TJA1003 1", "TJA2009 8" }, document.Diagnostics().Select(d => d.Code + " " + d.Line));
+        var document = new TjaDocument("BPM:x\nCOURSE:Easy\nLEVEL:1\n#START\n1,\n#END\nCOURSE:Oni\nLEVEL:9\n#START\n#FOO\n1,\n#END\n");
+        Assert.Equal(new[] { "TJA1003 1", "TJA2009 10" }, document.Diagnostics().Select(d => d.Code + " " + d.Line));
     }
 }

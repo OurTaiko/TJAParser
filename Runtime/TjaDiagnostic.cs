@@ -11,6 +11,8 @@ namespace OurTaiko
         Error,
         // Parsed with OpenTaiko's tolerance: TaikoChart.Warnings.
         Warning,
+        // A note for the chart's author (an editor's check, TjaLint): nothing wrong in the parse.
+        Information,
     }
 
     // One kind of problem: a stable code (TJA1xxx errors, TJA2xxx warnings) and the English
@@ -80,6 +82,21 @@ namespace OurTaiko
         public static readonly TjaDiagnosticKind RollEndedByNote = Warning("TJA2014", "An unended roll is ended by a note of type {0} (measure {1})");
         public static readonly TjaDiagnosticKind UnusedNoteE = Warning("TJA2015", "The unused note E is treated as a blank (measure {0})");
         public static readonly TjaDiagnosticKind BalloonWithoutCount = Warning("TJA2016", "A balloon has no count in {0}; it takes 5 hits (measure {1})");
+
+        // An editor's checks (TjaLint, in TjaDocument.Diagnostics): not the parser's, so neither in
+        // TaikoChart.Warnings nor in what TjaParser.Parse throws.
+        static TjaDiagnosticKind Information(string code, string format) => new TjaDiagnosticKind(code, TjaSeverity.Information, format);
+        // What makes SongInfo.Read refuse the whole file.
+        public static readonly TjaDiagnosticKind UnsupportedCourse = Error("TJA3001", "Unsupported COURSE '{0}': the whole file is refused.");
+        public static readonly TjaDiagnosticKind BlockWrittenTwice = Error("TJA3002", "{0}/{1} is written twice: the whole file is refused.");
+        public static readonly TjaDiagnosticKind StartPlayer = Error("TJA3003", "#START takes P1 or P2, not '{0}': the whole file is refused.");
+        public static readonly TjaDiagnosticKind LevelOutOfRange = Warning("TJA3004", "LEVEL is {0}: not 1 to 10.");
+        public static readonly TjaDiagnosticKind SimilarCommand = Information("TJA3005", "Did you mean {0}?");
+        public static readonly TjaDiagnosticKind UnusualSlots = Information("TJA3006", "{0} slots in a measure make notes of 1/{1}: not a division by 2s and 3s.");
+        public static readonly TjaDiagnosticKind RoutesEndApart = Warning("TJA3007", "The routes of branch {0} end at different times ({1}).");
+
+        // Whether the parser reports it (TJA1xxx, TJA2xxx); TJA3xxx are the editor's checks.
+        public bool FromParser => !Code.StartsWith("TJA3", StringComparison.Ordinal);
     }
 
     // One problem found where it is. Every occurrence is one diagnostic (TaikoChart.Warnings keeps

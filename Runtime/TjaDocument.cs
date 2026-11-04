@@ -102,7 +102,8 @@ namespace OurTaiko
         }
 
         // Every problem of the document: each block's, analysed as asked (Analyze), once each
-        // where several blocks share one (a header before them all), in the order of the text.
+        // where several blocks share one (a header before them all), and the editor's checks
+        // (TjaLint: TJA3xxx), in the order of the text.
         public List<TjaDiagnostic> Diagnostics(CancellationToken cancel = default)
         {
             var all = new List<TjaDiagnostic>();
@@ -114,6 +115,10 @@ namespace OurTaiko
                 foreach (var d in Analyze(block.Course, block.Side, cancel).Diagnostics)
                     if (seen.Add((d.Code, d.Span.Start, d.Span.Length, d.Message))) all.Add(d);
             }
+            var checks = new List<TjaDiagnostic>();
+            TjaLint.Check(this, checks, cancel);
+            foreach (var d in checks)
+                if (seen.Add((d.Code, d.Span.Start, d.Span.Length, d.Message))) all.Add(d);
             // Stable: in the text's order, a block's own order where they meet.
             var ordered = new List<TjaDiagnostic>(all.Count);
             foreach (var d in System.Linq.Enumerable.OrderBy(all, d => d.Span.Start)) ordered.Add(d);
