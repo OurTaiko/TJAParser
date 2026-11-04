@@ -53,15 +53,21 @@ namespace OurTaiko
 
         public bool TryGetTailSpan(ChartNote note, out TextSpan span) => tails.TryGetValue(note, out span);
 
+        // Sorted for NoteAt once the analysis is made, so that readers change nothing.
+        internal void Seal()
+        {
+            if (sorted) return;
+            // Stable, so that at one place the order written is kept.
+            var order = new List<(TextSpan Span, ChartNote Note, bool Tail)>(written);
+            written.Clear();
+            written.AddRange(System.Linq.Enumerable.OrderBy(order, e => e.Span.Start));
+            sorted = true;
+        }
+
         // The note written at an offset, or null; `tail` says it is a roll's end there. Where a
         // note ends a roll, the note itself is given.
         public ChartNote NoteAt(int offset, out bool tail)
         {
-            if (!sorted)
-            {
-                written.Sort((a, b) => a.Span.Start.CompareTo(b.Span.Start));
-                sorted = true;
-            }
             int lo = 0, hi = written.Count - 1, found = -1;
             while (lo <= hi)
             {

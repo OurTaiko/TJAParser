@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace OurTaiko
 {
@@ -32,8 +33,9 @@ namespace OurTaiko
         List<TjaLine> lines;
         TjaSourceText lineStarts;
 
-        List<TjaLine> AllLines => lines ?? (lines = new List<TjaLine>(TjaLines.Read(Text)));
-        TjaSourceText LineStarts => lineStarts ?? (lineStarts = new TjaSourceText(Text));
+        // Made once, whichever thread asks first (another may make one too; one is kept).
+        List<TjaLine> AllLines => LazyInitializer.EnsureInitialized(ref lines, () => new List<TjaLine>(TjaLines.Read(Text)));
+        TjaSourceText LineStarts => LazyInitializer.EnsureInitialized(ref lineStarts, () => new TjaSourceText(Text));
 
         // How many analyses this version moved from an earlier one, and read afresh.
         internal int Reused, Fresh;
@@ -47,12 +49,15 @@ namespace OurTaiko
             this.earlier = earlier ?? new Dictionary<(string, string), TjaAnalysis>();
         }
 
-        // The next version with this text.
+        // The next version with this text. This one stays as it is, for whoever still reads it.
         public TjaDocument WithText(string text, int version)
         {
-            var carried = new Dictionary<(string, string), TjaAnalysis>(earlier);
+            Dictionary<(string, string), TjaAnalysis> carried;
             lock (gate)
+            {
+                carried = new Dictionary<(string, string), TjaAnalysis>(earlier);
                 foreach (var pair in analyses) carried[pair.Key] = pair.Value;
+            }
             return new TjaDocument(text, version, carried);
         }
 
@@ -88,18 +93,27 @@ namespace OurTaiko
             }
         }
 
-        // One block, as TjaParser.Analyze reads it.
-        public TjaAnalysis Analyze(string course = "Oni", string side = "single")
+        // One block, as TjaParser.Analyze reads it. Threads may ask at once (a block asked for by
+        // two may be read by both; one analysis is kept and given to both). A cancelled read
+        // throws OperationCanceledException and keeps nothing: the next call reads the block.
+        public TjaAnalysis Analyze(string course = "Oni", string side = "single", CancellationToken cancel = default)
         {
             var key = (course, side);
+            TjaAnalysis old;
             lock (gate)
             {
                 if (analyses.TryGetValue(key, out var done)) return done;
-                TjaAnalysis analysis = null;
-                if (earlier.TryGetValue(key, out var old)) analysis = Moved(old, Text, AllLines, LineStarts);
-                if (analysis != null) Reused++;
-                else { analysis = TjaParser.Analyze(Text, course, side); Fresh++; }
-                analysis.Share(LineStarts);
+                earlier.TryGetValue(key, out old);
+            }
+            var analysis = old == null ? null : Moved(old, Text, AllLines, LineStarts, cancel);
+            bool moved = analysis != null;
+            if (!moved) analysis = TjaParser.Analyze(Text, course, side, cancel);
+            analysis.Version = Version;
+            analysis.Share(LineStarts);
+            lock (gate)
+            {
+                if (analyses.TryGetValue(key, out var first)) return first;
+                if (moved) Reused++; else Fresh++;
                 analyses[key] = analysis;
                 return analysis;
             }
@@ -109,7 +123,7 @@ namespace OurTaiko
         // moved only when every line that matters to it (ReadLines: every line up to its block's
         // end but the other blocks' bodies) is the same in `text`, character for character, and
         // has moved as the edit moves it.
-        internal static TjaAnalysis Moved(TjaAnalysis old, string text, IReadOnlyList<TjaLine> textLines, TjaSourceText newLines)
+        internal static TjaAnalysis Moved(TjaAnalysis old, string text, IReadOnlyList<TjaLine> textLines, TjaSourceText newLines, CancellationToken cancel = default)
         {
             if (old.Chart == null || old.ReadLines == null || old.StartLineIndex < 0) return null;
             string before = old.Text;
@@ -149,6 +163,7 @@ namespace OurTaiko
             {
                 foreach (var line in textLines)
                 {
+                    if ((k & 255) == 0) cancel.ThrowIfCancellationRequested();
                     if (k == old.ReadLines.Count) break;
                     // The other blocks' bodies do not matter (and were not kept).
                     if (line.Kind == TjaLineKind.Body && !inBlock) continue;
