@@ -41,7 +41,9 @@ namespace OurTaiko
             var balloons = NewBalloonLists();
             bool seenCourse = false;
             string course = "Oni";
-            int level = 0;
+            // BPM, OFFSET and LEVEL as written; only the values in force for the block played are
+            // read, so an unreadable one elsewhere in the file (another course) does not fail it.
+            string bpm = null, offset = null, level = null;
             bool reading = false, found = false, ended = false;
             // A scroll command after the course's COURSE: and before its #START sets how it begins.
             ScrollMode startMode = ScrollMode.Normal;
@@ -51,7 +53,7 @@ namespace OurTaiko
                 if (line.Kind == TjaLineKind.Start)
                 {
                     reading = SameCourse(course, requestedCourse) && ChartSide.OfStart(line.Value) == requestedSide;
-                    if (reading) { found = true; chart.Course = Course(course).Split('_')[0]; chart.Level = level; }
+                    if (reading) { found = true; chart.Course = Course(course).Split('_')[0]; chart.Level = level == null ? 0 : (int)Number(level); }
                     continue;
                 }
                 if (line.Kind == TjaLineKind.End)
@@ -78,14 +80,13 @@ namespace OurTaiko
                 {
                     case "TITLE": chart.Title = value; break;
                     case "SUBTITLE": chart.Subtitle = value.TrimStart('-', '+'); break;
-                    case "BPM": chart.Bpm = Number(value); break;
-                    // OpenTaiko keeps OFFSET in whole milliseconds, cut toward zero.
-                    case "OFFSET": chart.Offset = (int)(Number(value) * 1000) / 1000.0; break;
+                    case "BPM": bpm = value; break;
+                    case "OFFSET": offset = value; break;
                     case "COURSE":
-                        course = value; level = 0; seenCourse = true; startMode = ScrollMode.Normal;
+                        course = value; level = null; seenCourse = true; startMode = ScrollMode.Normal;
                         for (int r = 0; r < 3; r++) balloons[r] = new List<int>(globalBalloons[r]);
                         break;
-                    case "LEVEL": level = (int)Number(value); break;
+                    case "LEVEL": level = value; break;
                     // OpenTaiko: BALLOON is the Normal route's list; each header replaces its route's list.
                     case "BALLOON": case "BALLOONNOR": case "BALLOONEXP": case "BALLOONMAS":
                         int route = line.Key == "BALLOONEXP" ? 1 : line.Key == "BALLOONMAS" ? 2 : 0;
@@ -96,6 +97,9 @@ namespace OurTaiko
                 }
             }
             if (!found || !ended) throw new FormatException($"No {requestedCourse} course (#START) on the {requestedSide} side.");
+            if (bpm != null) chart.Bpm = Number(bpm);
+            // OpenTaiko keeps OFFSET in whole milliseconds, cut toward zero.
+            if (offset != null) chart.Offset = (int)(Number(offset) * 1000) / 1000.0;
             if (!(chart.Bpm > 0) || double.IsInfinity(chart.Bpm)) throw new FormatException("BPM must be positive and finite.");
             new ChartReader(chart, balloons, startMode).Read(tokens);
             return chart;
