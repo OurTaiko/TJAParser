@@ -76,8 +76,9 @@ public class DiagnosticTests
     [Fact]
     public void EveryKindHasACase()
     {
+        // The parser's kinds; the editor's checks (TJA3xxx) are LintTests'.
         var covered = Cases().Select(c => (string)c[0]).ToHashSet();
-        Assert.All(TjaDiagnosticKind.All, k => Assert.Contains(k.Code, covered));
+        Assert.All(TjaDiagnosticKind.All.Where(k => k.FromParser), k => Assert.Contains(k.Code, covered));
         Assert.Equal(TjaDiagnosticKind.All.Count, TjaDiagnosticKind.All.Select(k => k.Code).Distinct().Count());
     }
 
