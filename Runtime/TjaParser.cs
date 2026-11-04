@@ -506,6 +506,8 @@ namespace OurTaiko
                 SuddenShow = state.SuddenShow, SuddenMove = state.SuddenMove,
                 BranchId = BranchId, Route = route };
 
+            static readonly string[] BalloonHeaders = { "BALLOON", "BALLOONEXP", "BALLOONMAS" };
+
             // A route without a list, or past its end, gives 5 hits (OpenTaiko's default for an
             // empty list; past the end it leaves 0, which no balloon can be popped at).
             int NextBalloon(int r)
@@ -718,10 +720,14 @@ namespace OurTaiko
                         var note = NewNote(); note.Kind = (NoteKind)type;
                         if (note.IsBalloon)
                         {
-                            if (InRoute) note.BalloonHits = NextBalloon((int)route);
+                            // The list the count comes from: the route's, or outside a route the Normal one.
+                            int list = InRoute ? (int)route : 0;
+                            bool listed = balloonIndex[list] < balloons[list].Count;
+                            if (InRoute) note.BalloonHits = NextBalloon(list);
                             else { note.BalloonHits = NextBalloon(0); NextBalloon(1); NextBalloon(2); }
                             // An inline count still takes its place in the lists.
                             if (inlineHits.HasValue) note.BalloonHits = inlineHits.Value;
+                            else if (!listed) Warn($"A balloon has no count in {BalloonHeaders[list]}; it takes 5 hits (measure {measure})");
                         }
                         chart.Notes.Add(note);
                         Entries.Add(new ChartEntry(note, false));

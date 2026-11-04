@@ -54,7 +54,7 @@
 |---|---|---|---|---|---|---|
 | ✅ | P3-1 | `HasNotes` 按「有数字」判断：全 `0` 算有、只有 `G`/`C`/`F` 算没有 | `SongInfo.Read` | 按真正的音符字符判断 | `hasNotes` 可能变化，通知两站 | `TjaParser.HasNote`：1–7、9、`C`、`F`、`G` 算，`0`、`8`、`E` 与 `[…]` 内的打数不算；golden 无变化（语料中没有只含空白或只含字母音符的块），新增单元测试；规范 §3.2 同步。**两站**：只写 0 的块 `hasNotes` 由真变假，只写 `G`/`C`/`F` 的块由假变真 |
 | ✅ | P3-2 | `#STARTxxx` 被当成块开始 | `TjaLines.Read` | `#START` 后须是空白或行尾 | 有测试 | 按 OpenTaiko 的指令名规则（`#` 加大写字母，见其 `CommandAndArgumentRegex`）：`#START` 后紧跟字母（不分大小写）就不是块开始；`#START1` 等仍是（之后由 SongInfo 拒绝非 P1/P2）。golden 中只有 1 份含 `#STARTE` 的变异谱改变；规范 §1.4 同步 |
-| ⬜ | P3-3 | 气球用完列表时静默取 5 | `NextBalloon` | 加警告 | 只多警告，哈希不变 | |
+| ✅ | P3-3 | 气球用完列表时静默取 5 | `NextBalloon` | 加警告 | 只多警告，哈希不变 | 警告 `A balloon has no count in BALLOON|BALLOONEXP|BALLOONMAS; it takes 5 hits (measure n)`，有内联打数的不警告；golden 有 456 份摘要变化，已核对：去掉这条警告后 644 份全部与之前一致；规范 §7.2 同步 |
 | ⬜ | P3-4 | 警告不带位置 | 各处 `Warn` | 带行号 | 警告文本变化，同步两站 | |
 | ⬜ | P3-5 | `ReadCondition`、`Scroll` 依赖正则 | `TjaParser.cs` | 手写解析 | 行为不变（测试 + fuzz） | |
 
