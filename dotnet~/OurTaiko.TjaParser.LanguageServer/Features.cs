@@ -12,6 +12,7 @@ public sealed partial class Server
         capabilities["hoverProvider"] = true;
         capabilities["foldingRangeProvider"] = true;
         capabilities["inlayHintProvider"] = true;
+        capabilities["codeActionProvider"] = true;
         capabilities["codeLensProvider"] = new JsonObject { ["resolveProvider"] = false };
         var types = new JsonArray();
         foreach (string type in SemanticTokens.Types) types.Add(type);
@@ -121,6 +122,31 @@ public sealed partial class Server
                             ["command"] = new JsonObject { ["title"] = summary.Title, ["command"] = "" },
                         });
                     result = lenses;
+                }
+                break;
+            case "textDocument/codeAction":
+                handled = true;
+                if (documents.TryGetValue((string)p["textDocument"]["uri"], out document))
+                {
+                    string uri = (string)p["textDocument"]["uri"];
+                    var range = TextSpan.FromBounds(Offset(document, p["range"]["start"]), Offset(document, p["range"]["end"]));
+                    var actions = new JsonArray();
+                    void Offer(TjaCodeAction action)
+                    {
+                        var edits = new JsonArray();
+                        foreach (var e in action.Edits) edits.Add(new JsonObject { ["range"] = Range(document, e.Span), ["newText"] = e.NewText });
+                        actions.Add(new JsonObject
+                        {
+                            ["title"] = action.Title, ["kind"] = action.Fixes != null ? "quickfix" : "refactor.rewrite",
+                            ["edit"] = new JsonObject { ["changes"] = new JsonObject { [uri] = edits } },
+                        });
+                    }
+                    foreach (var d in document.Diagnostics(cancel))
+                        if (d.Span.Start <= range.End && range.Start <= d.Span.End)
+                            foreach (var action in TjaQuickFix.For(document, d)) Offer(action);
+                    if (document.BlockAt(range.Start) is TjaDocumentBlock here && TjaQuickFix.InlineBalloons(document, here.Course, here.Side, cancel) is TjaCodeAction inline)
+                        Offer(inline);
+                    result = actions;
                 }
                 break;
             case "textDocument/hover":
