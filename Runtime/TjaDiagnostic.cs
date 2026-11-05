@@ -118,6 +118,14 @@ namespace OurTaiko
             Kind = kind; Message = message; Args = Array.AsReadOnly(args ?? Array.Empty<object>()); Line = line; Span = span;
         }
 
+        // The message in a language ("zh", "ja", or English for any other), for an editor.
+        public string MessageIn(string language)
+        {
+            var args = new object[Args.Count];
+            for (int i = 0; i < args.Length; i++) args[i] = Args[i];
+            return TjaMessages.Format(Kind, language, args);
+        }
+
         public override string ToString() => $"{Code} line {Line} {Span}: {Message}";
     }
 }
