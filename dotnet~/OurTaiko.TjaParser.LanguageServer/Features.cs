@@ -11,6 +11,8 @@ public sealed partial class Server
         capabilities["completionProvider"] = new JsonObject { ["triggerCharacters"] = new JsonArray("#", ":", " ") };
         capabilities["hoverProvider"] = true;
         capabilities["foldingRangeProvider"] = true;
+        capabilities["inlayHintProvider"] = true;
+        capabilities["codeLensProvider"] = new JsonObject { ["resolveProvider"] = false };
         var types = new JsonArray();
         foreach (string type in SemanticTokens.Types) types.Add(type);
         capabilities["semanticTokensProvider"] = new JsonObject
@@ -94,6 +96,31 @@ public sealed partial class Server
                             ["uri"] = (string)p["textDocument"]["uri"], ["range"] = Range(document, span),
                             ["time"] = note.Time, ["kind"] = note.Kind.ToString(),
                         };
+                }
+                break;
+            case "textDocument/inlayHint":
+                handled = true;
+                if (documents.TryGetValue((string)p["textDocument"]["uri"], out document))
+                {
+                    var range = TextSpan.FromBounds(Offset(document, p["range"]["start"]), Offset(document, p["range"]["end"]));
+                    var hints = new JsonArray();
+                    foreach (var hint in TjaSummary.Hints(document, range, cancel))
+                        hints.Add(new JsonObject { ["position"] = Position(document, hint.Offset), ["label"] = hint.Label, ["paddingRight"] = true });
+                    result = hints;
+                }
+                break;
+            case "textDocument/codeLens":
+                handled = true;
+                if (documents.TryGetValue((string)p["textDocument"]["uri"], out document))
+                {
+                    var lenses = new JsonArray();
+                    foreach (var summary in TjaSummary.Blocks(document, cancel))
+                        lenses.Add(new JsonObject
+                        {
+                            ["range"] = Range(document, summary.Block.StartSpan),
+                            ["command"] = new JsonObject { ["title"] = summary.Title, ["command"] = "" },
+                        });
+                    result = lenses;
                 }
                 break;
             case "textDocument/hover":

@@ -4,11 +4,13 @@ using Xunit;
 namespace OurTaiko.Tests;
 
 // The tjaparser command as the servers run it: its exit codes.
+// The console is the process's: tests that capture it run one after another.
+[Collection("Console")]
 public class CliTests
 {
     // The command is self-contained, so it runs here through its entry point; only these tests
     // write to the console, and the tests of one class run one at a time.
-    static (int Code, string Out, string Err) Run(string text, params string[] args)
+    internal static (int Code, string Out, string Err) Run(string text, params string[] args)
     {
         string file = Path.GetTempFileName();
         var (stdout, stderr) = (Console.Out, Console.Error);
