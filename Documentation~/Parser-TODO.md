@@ -64,6 +64,17 @@
 | ✅ | I3-5 | 诊断消息本地化 | I0-2 | 中／日／英；Schema 文档同步多语言 | 旧 API 的英文警告文字不变 | `TjaMessages`：全部 39 种诊断（TJA1xxx／2xxx／3xxx）的中文与日文模板，占位符与英文一致；`TjaDiagnostic.MessageIn(language)`（zh-*、ja，其余为英文；缺少 LEVEL 单独措辞）。服务按 initialize 的 `locale` 发布对应语言的诊断。`Parse` 的异常与 `Warnings` 仍是英文（golden 不变）。`MessageTests`：每种都有两种译文且占位符集合相同、按语言取文字、服务以 ja 发布。**Schema 文档（悬停、补全说明）未做多语言**，仍为英文，以节省用量；需要时可按同样方式补一张表 |
 | ➖ | I3-6 | Web 版 IDE 的运行方式 | I2-1 | 验证 netstandard2.1 库在 .NET WASM 中运行（若 IDE 做成网页），或经 LSP 远程服务 | 浏览器中解析 Large 的耗时记录在本文 | ➖ 暂不做（为节省用量）。环境里可安装 `wasm-tools` 工作负载（`dotnet workload search wasm` 可见），但需下载数百 MB 的工具链、建浏览器工程并在无头 Chromium 中计时，成本高；而网页 IDE 已有现成路线：Monaco + monaco-languageclient 经 WebSocket 桥接到 `tja-language-server`（I2-1），不必在浏览器里跑库。若之后决定纯前端运行，再按本项验收：`dotnet workload install wasm-tools`，用 `wasmbrowser` 模板引用 netstandard2.1 库，在 Chromium 中解析 Large 并记录耗时 |
 
+## 后续：IDE 需要的库功能
+
+IDE 本身在新仓库开发（见 [`IDE-Plan.md`](IDE-Plan.md)），接口说明见 [`Editor-API.md`](Editor-API.md)。库这边按 IDE 的进度补：
+
+| 状态 | 编号 | 事项 | 何时需要 | 做法 | 验收 | 记录 |
+|---|---|---|---|---|---|---|
+| ⬜ | E1 | 按时刻编辑：在某时刻（某路线）放置、删除、更换音符，生成对应的文本修改 | IDE M4 可视化编辑 | 由小节表与 `StateAt` 定位到小节与格；时刻不在现有格上时按 `TjaFormat` 的方式细分该小节；结果用 `TjaTextEdit` 返回并复核 | 放置后该时刻恰有该音符，其余音符不变 | |
+| ⬜ | E2 | 改 BPM 并保持后续时刻不变（I3-3 中未做的部分） | IDE M4 | 改写其后直到下一次变速的 `#MEASURE` 与 SCROLL（保持 BPM×SCROLL），BM/HB 下不提供 | 除目标外哈希不变 | |
+| ⬜ | E3 | Schema 说明（悬停、补全）的中文与日文（I3-5 中未做的部分） | IDE M1 界面多语言 | 按 `TjaMessages` 的方式为 `TjaKeyword.Summary` 加译文表 | 每条都有两种译文 | |
+| ⬜ | E4 | 库的分发：IDE 以 submodule 引用，或打 NuGet 包 | IDE M0 | 先用 submodule；稳定后视需要打包 | IDE 能在三平台构建 | |
+
 ## 编辑器性能预算（I1-2）
 
 `dotnet~/OurTaiko.TjaParser.Benchmarks` 的 `EditorBenchmarks`（时间）与测试 `BudgetTests`（分配，超出即失败）。Large 是生成谱（5 个难度 × 400 小节，约 90 KB），操作都针对最后一块；`TypeInBlock` 是在该块音符行里插一个字符后重读该块，`TypeAndReadAll` 是同样的编辑后取全部块（其余块被移动而非重读）。
