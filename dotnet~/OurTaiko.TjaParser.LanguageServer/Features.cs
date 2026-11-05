@@ -70,6 +70,32 @@ public sealed partial class Server
                     result = ranges;
                 }
                 break;
+            // A preview following the cursor: the block, time, measure and route at a position.
+            case "tja/timeAt":
+                handled = true;
+                if (At(p, out document, out offset) && document.BlockAt(offset) is TjaDocumentBlock block
+                    && document.Analyze(block.Course, block.Side, cancel).StateAt(offset, cancel) is TjaPositionState state)
+                    result = new JsonObject
+                    {
+                        ["course"] = block.Course, ["side"] = block.Side, ["time"] = state.Time, ["measure"] = state.Measure,
+                        ["branch"] = state.BranchId, ["route"] = state.Route?.ToString(),
+                    };
+                break;
+            // A note clicked in a preview: where the note nearest a time on a route is written.
+            case "tja/noteAt":
+                handled = true;
+                if (documents.TryGetValue((string)p["textDocument"]["uri"], out document))
+                {
+                    var analysis = document.Analyze((string)p["course"] ?? "Oni", (string)p["side"] ?? "single", cancel);
+                    var route = Enum.TryParse<BranchRoute>((string)p["route"] ?? "Normal", out var r) ? r : BranchRoute.Normal;
+                    if (analysis.NoteNear((double)p["time"], route) is ChartNote note && analysis.SourceMap.TryGetSpan(note, out var span))
+                        result = new JsonObject
+                        {
+                            ["uri"] = (string)p["textDocument"]["uri"], ["range"] = Range(document, span),
+                            ["time"] = note.Time, ["kind"] = note.Kind.ToString(),
+                        };
+                }
+                break;
             case "textDocument/hover":
                 handled = true;
                 if (At(p, out document, out offset) && TjaHover.At(document, offset, cancel) is TjaHoverInfo hover)

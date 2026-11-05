@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 
@@ -38,6 +39,23 @@ namespace OurTaiko
             var sources = new List<LineSource>();
             var parser = new TjaParser.ChartParser(sources, new List<TjaDiagnostic>()) { Cancel = cancel };
             return parser.Capture(Text, TjaLines.Read(Text, sources), Course, Side, offset);
+        }
+
+        // The note nearest a time that a player on a route hits (common notes, and in each branch
+        // the route drawn for it), for a preview to find in the text; the first of notes as near.
+        // Null without a chart or a note.
+        public ChartNote NoteNear(double time, BranchRoute route = BranchRoute.Normal)
+        {
+            if (Chart == null) return null;
+            ChartNote best = null;
+            double distance = double.PositiveInfinity;
+            foreach (var note in Chart.Notes)
+            {
+                if (note.BranchId >= 0 && note.Route != Chart.Branches[note.BranchId].ResolveRoute(route)) continue;
+                double d = Math.Abs(note.Time - time);
+                if (d < distance) { best = note; distance = d; }
+            }
+            return best;
         }
 
         // Every measure in the order it is written: the common ones and each route's (see
