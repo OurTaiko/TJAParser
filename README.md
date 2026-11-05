@@ -18,6 +18,7 @@ Runtime/                     纯 C# 源码，Unity 与 dotnet 共用；asmdef �
   ChartCanonical.cs          谱面对象的规范文本
   ChartHash.cs               块哈希：ChartHash.Of(chart)、ChartHash.OfFile(text)
   LaneAlpha.cs               #LANE_ALPHA 的数据与求值
+  NoteScroll.cs ScrollClockTimeline.cs  音符在轨道上的位置（普通／BM／HB 滚动、#SUDDEN、整像素），游戏、View_Web、CharTaiko 共用
   编辑器用（游戏不需要，见 Documentation~/Editor-API.md）：
   TextSpan.cs TjaDiagnostic.cs TjaMessages.cs           位置与行列、诊断及其中日文
   TjaAnalysis.cs ChartSourceMap.cs TjaDocument.cs        一块的分析、源码映射、文档版本
@@ -72,6 +73,8 @@ tjaparser version                             算法版本，如 v1
 音符字符：`0`–`9`，以及 OpenTaiko 的 `F`（Ad-Lib，隐藏的加分音符）和 `G`（Kadon，紫色音符，咚和咔各打一下）。`F` 同样只认大写、会结束未闭合的连打；它不画也没有音符文字（`NoteMoji.None`，-1），音符文字的连段计算跳过它，`NoteKind.AdLib` 的值为 15。`G` 只认大写，与 OpenTaiko 相同；它是普通音符，会结束未闭合的连打，音符文字是新加的第 12 帧 カドン（`NoteMoji.Kadon`，OpenTaiko 用的是 ドン(大)），`NoteKind.Kadon` 的值为 16。`C`（地雷，打中扣分的音符）只认大写，是普通音符、会结束未闭合的连打；它要画但没有音符文字（`NoteMoji.None`），在连段里占位置但不算咚，`NoteKind.Mine` 的值为 12。`E` 在 OpenTaiko 里标为未使用，照它对未知符号的处理：占一格、不产生音符、记警告，遇到未闭合的连打先在该处结束连打；小写 `e` 仍报错。其余字母音符仍报 `NotSupportedException`。`inspect` 的 `notes` 仍只含 1–4，不含 `C`、`F` 和 `G`。
 
 轨道背景透明度 `#LANE_ALPHA <target>[%] [ms]`（OpenTaiko 没有，本库扩展）：`target` 是 0–100 的百分比；`ms` 可省（默认 0，立即切换），向零取整到毫秒，正数从指令处起在这么长时间内线性过渡，负数从「指令处 + ms」过渡到指令处。结果在 `TaikoChart.LaneAlphas`（`ChartLaneAlpha`：`Time`、`StartTime`、`EndTime`、`Alpha` 0–1、`BranchId`／`Route`，按 `StartTime` 排序），`LaneAlpha.At(…)` 是求某时刻透明度的参考实现（初始不透明，最后开始的指令接管、从当时的值过渡）。缺参数、读不出、超出 0–100 或多了参数：丢弃并记警告。它只是外观，不进规范文本，哈希不变。
+
+音符在轨道上的位置：`NoteScroll.Distance(note, time, clocks, travel)` 给出音符此刻离判定点的横纵距离（`travel` 是一小节在轨道上的长度，Nijiiro 版式为 `NoteScroll.MeasureWidth` 1440），`TailDistance` 是连打尾，`Appeared` 判断 `#SUDDEN` 的音符是否已出现；BM／HB 滚动按 `ScrollClockTimeline`（每条路线的拍子时钟）移动。时刻按整毫秒比较、位置向零取整到整像素，与 OpenTaiko 相同。2026-11-05 从 OurTaikoPlay 原样移入（游戏、View_Web 与 CharTaiko 原来各有一份相同的副本）；它只读 `TaikoChart`，不参与解析与哈希，别的格式读成 `TaikoChart` 后同样适用。
 
 完整语法规范（含 `#LANE_ALPHA` 的游戏接入要求）见 [`Documentation~/TJA-Specification.md`](Documentation~/TJA-Specification.md)。
 
