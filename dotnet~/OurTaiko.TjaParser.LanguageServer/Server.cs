@@ -18,6 +18,8 @@ public sealed partial class Server
     // Milliseconds to wait after a change before reading the document's diagnostics, so a burst of
     // typing reads once (initializationOptions.debounceMs; 0 in tests).
     int debounce = 150;
+    // The language of the messages: the client's locale (initialize), zh and ja translated.
+    string language;
     bool shutdown;
 
     public Server(Stream input, Stream output)
@@ -117,6 +119,7 @@ public sealed partial class Server
         {
             case "initialize":
                 if (p?["initializationOptions"]?["debounceMs"] is JsonNode d) debounce = (int)d;
+                language = (string)p?["locale"];
                 return new JsonObject
                 {
                     ["capabilities"] = Capabilities(),
@@ -179,13 +182,13 @@ public sealed partial class Server
         _ = task.ContinueWith(_ => background.TryRemove(key, out var _));
     }
 
-    static JsonObject Diagnostic(TjaDocument document, TjaDiagnostic d) => new()
+    JsonObject Diagnostic(TjaDocument document, TjaDiagnostic d) => new()
     {
         ["range"] = Range(document, d.Span),
         ["severity"] = d.Severity switch { TjaSeverity.Error => 1, TjaSeverity.Warning => 2, _ => 3 },
         ["code"] = d.Code,
         ["source"] = "tja",
-        ["message"] = d.Message,
+        ["message"] = d.MessageIn(language),
     };
 
     // Waits for the work in the background (for tests).
