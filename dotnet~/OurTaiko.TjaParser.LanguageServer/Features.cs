@@ -13,6 +13,7 @@ public sealed partial class Server
         capabilities["foldingRangeProvider"] = true;
         capabilities["inlayHintProvider"] = true;
         capabilities["codeActionProvider"] = true;
+        capabilities["documentFormattingProvider"] = true;
         capabilities["codeLensProvider"] = new JsonObject { ["resolveProvider"] = false };
         var types = new JsonArray();
         foreach (string type in SemanticTokens.Types) types.Add(type);
@@ -147,6 +148,17 @@ public sealed partial class Server
                     if (document.BlockAt(range.Start) is TjaDocumentBlock here && TjaQuickFix.InlineBalloons(document, here.Course, here.Side, cancel) is TjaCodeAction inline)
                         Offer(inline);
                     result = actions;
+                }
+                break;
+            // Formatting; FormattingOptions may carry tjaResolution (slots per whole note).
+            case "textDocument/formatting":
+                handled = true;
+                if (documents.TryGetValue((string)p["textDocument"]["uri"], out document))
+                {
+                    int resolution = p["options"]?["tjaResolution"] is JsonNode r ? (int)r : 0;
+                    var edits = new JsonArray();
+                    foreach (var e in TjaFormat.Edits(document, resolution, cancel)) edits.Add(new JsonObject { ["range"] = Range(document, e.Span), ["newText"] = e.NewText });
+                    result = edits;
                 }
                 break;
             case "textDocument/hover":
