@@ -72,7 +72,7 @@ IDE 本身在新仓库开发（见 [`IDE-Plan.md`](IDE-Plan.md)），接口说�
 |---|---|---|---|---|---|---|
 | ⬜ | E1 | 按拍位置编辑：在某位置（某路线）放置、删除、更换、移动音符，生成对应的文本修改 | IDE M4 可视化编辑 | 位置用「小节 + 小节内分数」表示（如第 12 小节的 3/16），不用秒，避免浮点；预览上的点击先吸附到网格再换成位置。由小节表定位到小节与格；位置不在现有格上时按 `TjaFormat` 的方式细分该小节；结果用 `TjaTextEdit` 返回，并复核规范文本除目标音符外不变。草案：`TjaEdit.Place(doc, course, side, route, position, kind)`、`Remove(doc, note)`、`ChangeKind(doc, note, kind)`、`Move(doc, note, position)` | 放置后该位置恰有该音符，其余音符不变 | |
 | ⬜ | E2 | 改 BPM 并保持后续时刻不变（I3-3 中未做的部分） | IDE M4 | 改写其后直到下一次变速的 `#MEASURE` 与 SCROLL（保持 BPM×SCROLL），BM/HB 下不提供 | 除目标外哈希不变 | |
-| ⬜ | E3 | Schema 说明（悬停、补全）的中文与日文（I3-5 中未做的部分） | IDE M1 界面多语言 | 按 `TjaMessages` 的方式为 `TjaKeyword.Summary` 加译文表 | 每条都有两种译文 | |
+| ✅ | E3 | Schema 说明（悬停、补全）的中文与日文（I3-5 中未做的部分） | IDE M1 界面多语言 | 按 `TjaMessages` 的方式为 `TjaKeyword.Summary` 加译文表 | 每条都有两种译文 | `TjaText`：全部指令与头部的说明（`TjaKeyword.SummaryIn(language)`），以及悬停（音符的名称、时刻、小节与格、速度、气球打数、分歧路线；指令的来源、是否影响游玩、规范章节）、补全说明（音符字符、分歧条件、星级）、快速修复与重构的标题、块摘要（`TjaBlockSummary.TitleIn`）的中文与日文。各功能加可选参数 `language`（`TjaHover.At`、`TjaCompletion.At`、`TjaQuickFix.For`／`InlineBalloons`、`TjaRefactor.Split`／`Join`），默认英文、英文输出不变；语言服务按 initialize 的 `locale` 传入。`EditorTextTests`：每条说明都有两种译文、各功能按语言给文字、服务以中文回答悬停与补全。参数名（`bpm`、`seconds` 等）与 `TaikoChart.Warnings` 仍为英文 |
 | ⬜ | E4 | 库的分发：IDE 以 submodule 引用，或打 NuGet 包 | IDE M0 | 先用 submodule；稳定后视需要打包 | IDE 能在三平台构建 | |
 | ⬜ | E5 | 其他格式（低优先）：别的格式的读取器，或给游戏用的编译缓存 | 需要别的谱面来源，或游戏加载变慢时 | 读取器产出 `SongInfo` 与每块的 `TaikoChart`，游戏与 CLI 按扩展名分派，判定与哈希不用改。要与 TJA 版共享成绩，`TaikoChart` 须逐位相同：直接存解析好的数值，或复用本库的时刻计算，不另写一套。编译缓存须存完整的 `TaikoChart`（规范文本只含参与哈希的字段），以 TJA 文件哈希与库版本判断是否过期 | 同一份谱经新格式与 TJA 读出的规范文本相同 | |
 

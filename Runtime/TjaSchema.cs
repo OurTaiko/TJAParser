@@ -91,6 +91,9 @@ namespace OurTaiko
         }
 
         public bool IsCommand => Name[0] == '#';
+
+        // Summary in a language ("zh…", "ja…"; anything else, or null, is English).
+        public string SummaryIn(string language) => TjaText.Summary(this, language);
     }
 
     // Every command and header the library reads: one table for the parser's dispatch, an

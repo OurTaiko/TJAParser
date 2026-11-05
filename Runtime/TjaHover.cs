@@ -29,19 +29,20 @@ namespace OurTaiko
         // The frames of NoteMoji, by number.
         static readonly string[] Moji = { "ドン", "ド", "コ", "カッ", "カ", "ドン(大)", "カッ(大)", "連打ー", "連打(大)ー", "ふうせん", "ーっ!!", "くすだま", "カドン" };
 
-        public static TjaHoverInfo At(TjaDocument document, int offset, CancellationToken cancel = default)
+        // Markdown in a language ("zh…", "ja…"; anything else, or null, is English).
+        public static TjaHoverInfo At(TjaDocument document, int offset, CancellationToken cancel = default, string language = null)
         {
             var block = document.BlockAt(offset);
             if (block != null && document.Lines.Line(offset) != block.Line)
             {
                 var analysis = document.Analyze(block.Course, block.Side, cancel);
                 if (analysis.Chart != null && analysis.SourceMap.NoteAt(offset, out bool tail) is ChartNote note)
-                    return Note(document.Text, analysis, note, tail, offset, cancel);
+                    return Note(document.Text, analysis, note, tail, offset, cancel, language);
             }
-            return Keyword(document, offset);
+            return Keyword(document, offset, language);
         }
 
-        static TjaHoverInfo Note(string text, TjaAnalysis analysis, ChartNote note, bool tail, int offset, CancellationToken cancel)
+        static TjaHoverInfo Note(string text, TjaAnalysis analysis, ChartNote note, bool tail, int offset, CancellationToken cancel, string language)
         {
             var map = analysis.SourceMap;
             map.TryGetSpan(note, out var head);
@@ -50,12 +51,12 @@ namespace OurTaiko
             else if (tail) span = new TextSpan(offset, 1);
             var info = new TjaHoverInfo { Span = span, Note = note, Tail = tail };
             var sb = new StringBuilder();
-            string name = Name(note.Kind);
+            string name = TjaText.NoteName(note.Kind, language);
             if (tail)
             {
-                sb.Append("**End of the ").Append(name.ToLowerInvariant()).Append("**\n\n");
-                sb.Append("From ").Append(Seconds(note.Time)).Append(" to ").Append(Seconds(note.EndTime))
-                    .Append(" (").Append(Seconds(note.EndTime - note.Time)).Append(")\n");
+                sb.Append(TjaText.Format(language, "**End of the {0}**", "**{0}的结尾**", "**{0}の終わり**", TjaText.Of(language) == TjaText.Lang.En ? name.ToLowerInvariant() : name)).Append("\n\n");
+                sb.Append(TjaText.Format(language, "From {0} to {1} ({2})", "从 {0} 到 {1}（{2}）", "{0} から {1}（{2}）",
+                    Seconds(note.Time, language), Seconds(note.EndTime, language), Seconds(note.EndTime - note.Time, language))).Append("\n");
                 info.Markdown = sb.ToString();
                 return info;
             }
@@ -67,36 +68,38 @@ namespace OurTaiko
             sb.Append("**").Append(name).Append("**");
             if (note.Moji >= 0 && note.Moji < Moji.Length) sb.Append(" ").Append(Moji[note.Moji]);
             sb.Append("\n\n");
-            sb.Append("Time ").Append(Seconds(note.Time));
-            if (note.IsLong) sb.Append(" to ").Append(Seconds(note.EndTime));
+            sb.Append(TjaText.Format(language, "Time {0}", "时刻 {0}", "時刻 {0}", Seconds(note.Time, language)));
+            if (note.IsLong) sb.Append(TjaText.Format(language, " to {0}", " 到 {0}", " 〜 {0}", Seconds(note.EndTime, language)));
             sb.Append("  \n");
             if (info.Measure != null)
-                sb.Append("Measure ").Append(info.Measure.Index + 1).Append(", slot ").Append(info.Slot + 1).Append(" of ").Append(info.Measure.Slots)
-                    .Append(" (beat ").Append(Number(note.Beat)).Append(")  \n");
-            sb.Append("Speed ").Append(Number(note.Bpm)).Append(" BPM × ").Append(Number(note.ScrollX));
+                sb.Append(TjaText.Format(language, "Measure {0}, slot {1} of {2} (beat {3})", "第 {0} 小节，{2} 格中的第 {1} 格（第 {3} 拍）", "{0} 小節目、{2} 個中 {1} 個目（{3} 拍）",
+                    info.Measure.Index + 1, info.Slot + 1, info.Measure.Slots, Number(note.Beat))).Append("  \n");
+            sb.Append(TjaText.Pick(language, "Speed ", "速度 ", "速さ ")).Append(Number(note.Bpm)).Append(" BPM × ").Append(Number(note.ScrollX));
             if (note.ScrollY != 0) sb.Append(" ").Append(note.ScrollY > 0 ? "+ " : "− ").Append(Number(Math.Abs(note.ScrollY))).Append("i");
             if (note.ScrollMode != ScrollMode.Normal) sb.Append(" (").Append(note.ScrollMode).Append(")");
             sb.Append("  \n");
             if (note.IsBalloon)
             {
                 info.Inline = text.IndexOf('[', head.Start, head.Length) >= 0;
-                sb.Append(note.BalloonHits).Append(" hits");
-                if (info.Inline) sb.Append(", written on it");
+                sb.Append(TjaText.Format(language, "{0} hits", "{0} 打", "{0} 打", note.BalloonHits));
+                if (info.Inline) sb.Append(TjaText.Pick(language, ", written on it", "，写在音符上", "、音符に書かれている"));
                 else if (state != null)
                 {
                     info.BalloonList = state.BalloonList; info.BalloonIndex = state.BalloonIndex;
-                    if (state.BalloonListed) sb.Append(", the ").Append(Ordinal(state.BalloonIndex + 1)).Append(" of ").Append(state.BalloonList);
-                    else sb.Append(": ").Append(state.BalloonList).Append(" has no ").Append(Ordinal(state.BalloonIndex + 1)).Append(" count");
+                    int n = state.BalloonIndex + 1;
+                    if (state.BalloonListed) sb.Append(TjaText.Format(language, ", the {0} of {1}", "，{1} 的第 {2} 个", "、{1} の {2} 番目", TjaText.Ordinal(n), state.BalloonList, n));
+                    else sb.Append(TjaText.Format(language, ": {1} has no {0} count", "：{1} 没有第 {2} 个打数", "：{1} に {2} 番目の打数がない", TjaText.Ordinal(n), state.BalloonList, n));
                 }
                 sb.Append("  \n");
             }
-            if (note.BranchId >= 0) sb.Append("Branch ").Append(note.BranchId).Append(", ").Append(note.Route).Append(" route\n");
+            if (note.BranchId >= 0)
+                sb.Append(TjaText.Format(language, "Branch {0}, {1} route", "分歧 {0}，{1}路线", "分岐 {0}、{1}ルート", note.BranchId, TjaText.RouteName(note.Route, language))).Append("\n");
             info.Markdown = sb.ToString();
             return info;
         }
 
         // A command or header: what the schema says of it. On its argument or value too.
-        static TjaHoverInfo Keyword(TjaDocument document, int offset)
+        static TjaHoverInfo Keyword(TjaDocument document, int offset, string language)
         {
             var tokens = document.Syntax;
             int line = document.Lines.Line(offset);
@@ -115,10 +118,12 @@ namespace OurTaiko
             var k = TjaSchema.Find(document.Text.Substring(keyword.Value.Span.Start, keyword.Value.Span.Length));
             if (k == null) return null;
             var sb = new StringBuilder();
-            sb.Append("```tja\n").Append(Signature(k)).Append("\n```\n\n").Append(k.Summary).Append("\n\n");
-            sb.Append(k.Origin == TjaOrigin.Tja ? "TJA" : k.Origin == TjaOrigin.OpenTaiko ? "OpenTaiko" : "OurTaiko (not in OpenTaiko)");
-            sb.Append(k.InHash ? " · changes what is played" : " · does not change what is played");
-            sb.Append(" · specification §").Append(k.Section);
+            sb.Append("```tja\n").Append(Signature(k)).Append("\n```\n\n").Append(k.SummaryIn(language)).Append("\n\n");
+            sb.Append(k.Origin == TjaOrigin.Tja ? "TJA" : k.Origin == TjaOrigin.OpenTaiko ? "OpenTaiko"
+                : TjaText.Pick(language, "OurTaiko (not in OpenTaiko)", "OurTaiko（OpenTaiko 中没有）", "OurTaiko（OpenTaiko にはない）"));
+            sb.Append(k.InHash ? TjaText.Pick(language, " · changes what is played", " · 会改变游玩内容", " · 演奏内容が変わる")
+                : TjaText.Pick(language, " · does not change what is played", " · 不改变游玩内容", " · 演奏内容は変わらない"));
+            sb.Append(TjaText.Pick(language, " · specification §", " · 规范 §", " · 仕様 §")).Append(k.Section);
             return new TjaHoverInfo { Span = at.Value.Span, Keyword = k, Markdown = sb.ToString() };
         }
 
@@ -140,15 +145,8 @@ namespace OurTaiko
             return sb.ToString();
         }
 
-        static string Name(NoteKind kind) => kind switch
-        {
-            NoteKind.Don => "Don", NoteKind.Ka => "Ka", NoteKind.BigDon => "Big don", NoteKind.BigKa => "Big ka",
-            NoteKind.Roll => "Drumroll", NoteKind.BigRoll => "Big drumroll", NoteKind.Balloon => "Balloon", NoteKind.Kusudama => "Kusudama",
-            NoteKind.Mine => "Mine", NoteKind.AdLib => "Ad-Lib", NoteKind.Kadon => "Kadon", _ => kind.ToString(),
-        };
 
-        static string Seconds(double s) => s.ToString("0.###", CultureInfo.InvariantCulture) + " s";
+        static string Seconds(double s, string language) => s.ToString("0.###", CultureInfo.InvariantCulture) + TjaText.Pick(language, " s", " 秒", " 秒");
         static string Number(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
-        static string Ordinal(int n) => n + (n % 100 is 11 or 12 or 13 ? "th" : (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" });
     }
 }

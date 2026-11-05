@@ -33,7 +33,7 @@ public sealed partial class Server
         {
             case "textDocument/completion":
                 handled = true;
-                result = At(p, out var document, out int offset) ? Completion(document, offset, cancel) : null;
+                result = At(p, out var document, out int offset) ? Completion(document, offset, cancel, language) : null;
                 break;
             case "textDocument/signatureHelp":
                 handled = true;
@@ -45,7 +45,7 @@ public sealed partial class Server
                     {
                         ["signatures"] = new JsonArray(new JsonObject
                         {
-                            ["label"] = signature.Label, ["documentation"] = signature.Keyword.Summary, ["parameters"] = parameters,
+                            ["label"] = signature.Label, ["documentation"] = signature.Keyword.SummaryIn(language), ["parameters"] = parameters,
                         }),
                         ["activeSignature"] = 0, ["activeParameter"] = signature.Active,
                     };
@@ -120,7 +120,7 @@ public sealed partial class Server
                         lenses.Add(new JsonObject
                         {
                             ["range"] = Range(document, summary.Block.StartSpan),
-                            ["command"] = new JsonObject { ["title"] = summary.Title, ["command"] = "" },
+                            ["command"] = new JsonObject { ["title"] = summary.TitleIn(language), ["command"] = "" },
                         });
                     result = lenses;
                 }
@@ -144,12 +144,12 @@ public sealed partial class Server
                     }
                     foreach (var d in document.Diagnostics(cancel))
                         if (d.Span.Start <= range.End && range.Start <= d.Span.End)
-                            foreach (var action in TjaQuickFix.For(document, d)) Offer(action);
+                            foreach (var action in TjaQuickFix.For(document, d, language)) Offer(action);
                     if (document.BlockAt(range.Start) is TjaDocumentBlock here)
                     {
-                        if (TjaRefactor.Split(document, here.Course, here.Side, range.Start, cancel) is TjaCodeAction split) Offer(split);
-                        if (TjaRefactor.Join(document, here.Course, here.Side, range.Start, cancel) is TjaCodeAction join) Offer(join);
-                        if (TjaQuickFix.InlineBalloons(document, here.Course, here.Side, cancel) is TjaCodeAction inline) Offer(inline);
+                        if (TjaRefactor.Split(document, here.Course, here.Side, range.Start, cancel, language) is TjaCodeAction split) Offer(split);
+                        if (TjaRefactor.Join(document, here.Course, here.Side, range.Start, cancel, language) is TjaCodeAction join) Offer(join);
+                        if (TjaQuickFix.InlineBalloons(document, here.Course, here.Side, cancel, language) is TjaCodeAction inline) Offer(inline);
                     }
                     result = actions;
                 }
@@ -167,7 +167,7 @@ public sealed partial class Server
                 break;
             case "textDocument/hover":
                 handled = true;
-                if (At(p, out document, out offset) && TjaHover.At(document, offset, cancel) is TjaHoverInfo hover)
+                if (At(p, out document, out offset) && TjaHover.At(document, offset, cancel, language) is TjaHoverInfo hover)
                     result = new JsonObject
                     {
                         ["contents"] = new JsonObject { ["kind"] = "markdown", ["value"] = hover.Markdown },
@@ -186,11 +186,11 @@ public sealed partial class Server
         return true;
     }
 
-    static JsonNode Completion(TjaDocument document, int offset, CancellationToken cancel)
+    static JsonNode Completion(TjaDocument document, int offset, CancellationToken cancel, string language)
     {
         var items = new JsonArray();
         int order = 0;
-        foreach (var item in TjaCompletion.At(document, offset, cancel))
+        foreach (var item in TjaCompletion.At(document, offset, cancel, language))
             items.Add(new JsonObject
             {
                 ["label"] = item.Label,

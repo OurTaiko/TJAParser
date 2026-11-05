@@ -15,7 +15,7 @@ namespace OurTaiko
 
         // The measure at an offset split before the slot there: `#MEASURE` lengths for both halves,
         // then the measure's own length again.
-        public static TjaCodeAction Split(TjaDocument document, string course, string side, int offset, CancellationToken cancel = default)
+        public static TjaCodeAction Split(TjaDocument document, string course, string side, int offset, CancellationToken cancel = default, string language = null)
         {
             var analysis = document.Analyze(course, side, cancel);
             var m = Plain(document, analysis, offset);
@@ -24,12 +24,12 @@ namespace OurTaiko
             if (k < 1 || k >= m.Slots) return null;
             string notes = document.Text.Substring(m.Span.Start, m.Slots);
             string text = $"#MEASURE {Fraction(m.Length * k / m.Slots)}\n{notes.Substring(0, k)},\n#MEASURE {Fraction(m.Length * (m.Slots - k) / m.Slots)}\n{notes.Substring(k)},\n#MEASURE {Fraction(m.Length)}";
-            return Checked(document, analysis, "Split the measure here", new TjaTextEdit(m.Span, text), +1);
+            return Checked(document, analysis, TjaText.Pick(language, "Split the measure here", "在此处拆分小节", "ここで小節を分ける"), new TjaTextEdit(m.Span, text), +1);
         }
 
         // The measure at an offset joined with the next: both on one grid, one #MEASURE for the two,
         // then the second's length again.
-        public static TjaCodeAction Join(TjaDocument document, string course, string side, int offset, CancellationToken cancel = default)
+        public static TjaCodeAction Join(TjaDocument document, string course, string side, int offset, CancellationToken cancel = default, string language = null)
         {
             var analysis = document.Analyze(course, side, cancel);
             var m = Plain(document, analysis, offset);
@@ -50,7 +50,7 @@ namespace OurTaiko
             string first = Stretch(document.Text.Substring(m.Span.Start, m.Slots), (int)k1);
             string second = Stretch(document.Text.Substring(next.Span.Start, next.Slots), (int)k2);
             string text = $"#MEASURE {Fraction(m.Length + next.Length)}\n{first}{second},\n#MEASURE {Fraction(next.Length)}";
-            return Checked(document, analysis, "Join with the next measure", new TjaTextEdit(TextSpan.FromBounds(m.Span.Start, next.Span.End), text), -1);
+            return Checked(document, analysis, TjaText.Pick(language, "Join with the next measure", "与下一小节合并", "次の小節とつなげる"), new TjaTextEdit(TextSpan.FromBounds(m.Span.Start, next.Span.End), text), -1);
         }
 
         static int IndexOf(IReadOnlyList<ChartMeasure> measures, ChartMeasure m)

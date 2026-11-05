@@ -32,16 +32,19 @@ namespace OurTaiko
         public IReadOnlyDictionary<string, int> Combo { get; internal set; }
         public IReadOnlyDictionary<string, int> PeakPerSecond { get; internal set; }
 
-        public string Title
+        public string Title => TitleIn(null);
+
+        // The title in a language ("zh…", "ja…"; anything else, or null, is English).
+        public string TitleIn(string language)
         {
-            get
-            {
-                string Routes(IReadOnlyDictionary<string, int> byRoute) => byRoute.Count == 1
-                    ? First(byRoute).ToString(CultureInfo.InvariantCulture)
-                    : string.Join("/", Values(byRoute));
-                return $"{Routes(Notes)} notes · max combo {Routes(Combo)} · {Duration.ToString("0.###", CultureInfo.InvariantCulture)} s"
-                    + $" · peak {Routes(PeakPerSecond)}/s · {Hash.Substring(0, Math.Min(Hash.Length, 15))}…";
-            }
+            string Routes(IReadOnlyDictionary<string, int> byRoute) => byRoute.Count == 1
+                ? First(byRoute).ToString(CultureInfo.InvariantCulture)
+                : string.Join("/", Values(byRoute));
+            return TjaText.Format(language,
+                "{0} notes · max combo {1} · {2} s · peak {3}/s · {4}…",
+                "{0} 个音符 · 最大连击 {1} · {2} 秒 · 峰值 {3}/秒 · {4}…",
+                "音符 {0} · 最大コンボ {1} · {2} 秒 · ピーク {3}/秒 · {4}…",
+                Routes(Notes), Routes(Combo), Duration.ToString("0.###", CultureInfo.InvariantCulture), Routes(PeakPerSecond), Hash.Substring(0, Math.Min(Hash.Length, 15)));
         }
 
         static int First(IReadOnlyDictionary<string, int> d)

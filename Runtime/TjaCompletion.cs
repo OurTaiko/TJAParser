@@ -29,22 +29,11 @@ namespace OurTaiko
     // is in a block (and in a branch there). Nothing in a comment.
     public static class TjaCompletion
     {
-        // The note characters and what they are.
-        static readonly (string Text, string Detail)[] Notes =
-        {
-            ("1", "Don"), ("2", "Ka"), ("3", "Big don"), ("4", "Big ka"), ("5", "Drumroll"), ("6", "Big drumroll"),
-            ("7", "Balloon"), ("9", "Kusudama"), ("8", "End of a roll"), ("0", "Blank"),
-            ("G", "Kadon: don and ka together (OpenTaiko)"), ("C", "Mine: not to be hit (OpenTaiko)"), ("F", "Ad-Lib: a hidden bonus note (OpenTaiko)"),
-            (",", "End of the measure"),
-        };
+        // The note characters, in the order offered (TjaText.NoteCharacter says what they are).
+        static readonly string[] Notes = { "1", "2", "3", "4", "5", "6", "7", "9", "8", "0", "G", "C", "F", "," };
 
-        static readonly Dictionary<string, string> Conditions = new Dictionary<string, string>
-        {
-            ["p"] = "Accuracy (%)", ["pp"] = "Good judgements (%)", ["jp"] = "Good judgements (count)", ["d"] = "Good judgements on big notes (count)",
-            ["jg"] = "OK judgements (count)", ["jb"] = "Bad judgements (count)", ["r"] = "Drumroll hits", ["rb"] = "Balloon hits", ["s"] = "Score",
-        };
-
-        public static List<TjaCompletionItem> At(TjaDocument document, int offset, CancellationToken cancel = default)
+        // Details in a language ("zh…", "ja…"; anything else, or null, is English).
+        public static List<TjaCompletionItem> At(TjaDocument document, int offset, CancellationToken cancel = default, string language = null)
         {
             var items = new List<TjaCompletionItem>();
             string text = document.Text;
@@ -58,8 +47,8 @@ namespace OurTaiko
             var block = document.BlockAt(offset);
             // The #START line itself (its player) is written as outside the block.
             bool onStartLine = block != null && document.Lines.Line(offset) == block.Line;
-            if (block == null || onStartLine) Outside(before, first, offset, items);
-            else Inside(document, block, before, first, offset, items, cancel);
+            if (block == null || onStartLine) Outside(before, first, offset, items, language);
+            else Inside(document, block, before, first, offset, items, cancel, language);
             return items;
         }
 
@@ -74,7 +63,7 @@ namespace OurTaiko
         static void Add(List<TjaCompletionItem> items, string label, TjaCompletionKind kind, string detail, string insert, int from, int to)
             => items.Add(new TjaCompletionItem { Label = label, Kind = kind, Detail = detail, Insert = insert, Replace = TextSpan.FromBounds(from, to) });
 
-        static void Outside(string before, int first, int offset, List<TjaCompletionItem> items)
+        static void Outside(string before, int first, int offset, List<TjaCompletionItem> items, string language)
         {
             int colon = before.IndexOf(':');
             if (before.StartsWith("#", StringComparison.Ordinal))
@@ -84,7 +73,7 @@ namespace OurTaiko
                 {
                     foreach (var k in TjaSchema.Commands)
                         if ((k.Scope & TjaScope.Outside) != 0 && Starts(k.Name, before))
-                            Add(items, k.Name, TjaCompletionKind.Command, k.Summary, k.Name, first, offset);
+                            Add(items, k.Name, TjaCompletionKind.Command, k.SummaryIn(language), k.Name, first, offset);
                 }
                 else if (before.Substring(0, space).Equals("#START", StringComparison.OrdinalIgnoreCase))
                     Values(TjaSchema.Find("#START").Parameters[0], before.Substring(space), first + space, offset, items);
@@ -92,7 +81,7 @@ namespace OurTaiko
             else if (colon < 0)
             {
                 foreach (var k in TjaSchema.Headers)
-                    if (Starts(k.Name, before)) Add(items, k.Name, TjaCompletionKind.Header, k.Summary, k.Name + ":", first, offset);
+                    if (Starts(k.Name, before)) Add(items, k.Name, TjaCompletionKind.Header, k.SummaryIn(language), k.Name + ":", first, offset);
             }
             else
             {
@@ -101,7 +90,7 @@ namespace OurTaiko
                 var parameter = header.Parameters[0];
                 if (header.Name == "LEVEL")
                 {
-                    for (int stars = 1; stars <= 10; stars++) AddValue(items, stars.ToString(), "Stars", before.Substring(colon + 1), first + colon + 1, offset);
+                    for (int stars = 1; stars <= 10; stars++) AddValue(items, stars.ToString(), TjaText.Stars(language), before.Substring(colon + 1), first + colon + 1, offset);
                     return;
                 }
                 Values(parameter, before.Substring(colon + 1), first + colon + 1, offset, items);
@@ -121,7 +110,7 @@ namespace OurTaiko
             if (Starts(value, typed.Substring(lead))) Add(items, value, TjaCompletionKind.Value, detail, value, from + lead, offset);
         }
 
-        static void Inside(TjaDocument document, TjaDocumentBlock block, string before, int first, int offset, List<TjaCompletionItem> items, CancellationToken cancel)
+        static void Inside(TjaDocument document, TjaDocumentBlock block, string before, int first, int offset, List<TjaCompletionItem> items, CancellationToken cancel, string language)
         {
             if (before.StartsWith("#", StringComparison.Ordinal))
             {
@@ -131,23 +120,23 @@ namespace OurTaiko
                     // #BRANCHSTART's condition, before its first comma.
                     if (before.Substring(0, space).Equals("#BRANCHSTART", StringComparison.OrdinalIgnoreCase) && before.IndexOf(',') < 0)
                         foreach (string value in TjaSchema.Find("#BRANCHSTART").Parameters[0].Values)
-                            AddValue(items, value, Conditions[value], before.Substring(space), first + space, offset);
+                            AddValue(items, value, TjaText.Condition(value, language), before.Substring(space), first + space, offset);
                     return;
                 }
-                Commands(document, block, before, first, offset, items, cancel);
+                Commands(document, block, before, first, offset, items, cancel, language);
                 return;
             }
             // A note line (or a line not begun): the notes, and at its start the commands too.
             foreach (char c in before)
                 if (!char.IsWhiteSpace(c) && c != ',' && TjaCompletion.NoteIndex(c) < 0 && c != '[' && c != ']' && !char.IsDigit(c)) return;
-            foreach (var (note, detail) in Notes) Add(items, note, TjaCompletionKind.Note, detail, note, offset, offset);
-            if (before.Length == 0) Commands(document, block, "", first, offset, items, cancel);
+            foreach (string note in Notes) Add(items, note, TjaCompletionKind.Note, TjaText.NoteCharacter(note, language), note, offset, offset);
+            if (before.Length == 0) Commands(document, block, "", first, offset, items, cancel, language);
         }
 
         static int NoteIndex(char c) => "0123456789CFG".IndexOf(c);
 
         // The block's commands; the route markers and #BRANCHEND only in a branch.
-        static void Commands(TjaDocument document, TjaDocumentBlock block, string typed, int first, int offset, List<TjaCompletionItem> items, CancellationToken cancel)
+        static void Commands(TjaDocument document, TjaDocumentBlock block, string typed, int first, int offset, List<TjaCompletionItem> items, CancellationToken cancel, string language)
         {
             var state = document.Analyze(block.Course, block.Side, cancel).StateAt(offset, cancel);
             bool inBranch = state != null && state.BranchId >= 0;
@@ -156,7 +145,7 @@ namespace OurTaiko
                 if ((k.Scope & TjaScope.Body) == 0 || !Starts(k.Name, typed)) continue;
                 bool branchOnly = k.Name == "#N" || k.Name == "#E" || k.Name == "#M" || k.Name == "#BRANCHEND";
                 if (branchOnly && !inBranch) continue;
-                Add(items, k.Name, TjaCompletionKind.Command, k.Summary, k.Name, first, offset);
+                Add(items, k.Name, TjaCompletionKind.Command, k.SummaryIn(language), k.Name, first, offset);
             }
         }
 
