@@ -97,7 +97,7 @@ cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # �
 
 ### 语言服务（LSP）
 
-`dotnet~/OurTaiko.TjaParser.LanguageServer` 是 `tja-language-server`：标准输入输出上的 LSP 服务（增量同步，改动后在后台重读诊断、新改动取消旧的读取），VS Code 客户端在 `Editors~/vscode`（说明见其 README），Monaco 等其它编辑器以同样方式连接。
+`dotnet~/OurTaiko.TjaParser.LanguageServer` 是 `tja-language-server`：标准输入输出上的 LSP 服务（增量同步，改动后在后台重读诊断、新改动取消旧的读取），VS Code 客户端在 `Editors~/vscode`（说明见其 README），Monaco 等其它编辑器以同样方式连接。提供：诊断（解析器的 TJA1xxx／2xxx 与编辑器检查 TJA3xxx）、补全、悬停、参数提示、折叠、语义着色（音符按种类）、Inlay hint（小节号、时刻、BPM）、Code lens（每块音符数、最大连击、时长、密度峰值、哈希），以及给预览用的自定义请求 `tja/timeAt`（光标处的时刻）与 `tja/noteAt`（某时刻最近的音符在源码中的位置）。这些功能都在库里（`TjaCompletion`、`TjaHover`、`TjaSignatureHelp`、`TjaFolding`、`TjaSummary`、`TjaLint`、`TjaSyntax`），不依赖 LSP，其它编辑器也可直接调用。
 
 ## SongInfo 的结构
 
