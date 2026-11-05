@@ -17,10 +17,23 @@ Runtime/                     纯 C# 源码，Unity 与 dotnet 共用；asmdef �
   SongInfo.cs                头部与块列表：Blocks 是文件里每个 #START，游戏与服务器用同一份；哪个座位玩哪块是游戏的事
   ChartCanonical.cs          谱面对象的规范文本
   ChartHash.cs               块哈希：ChartHash.Of(chart)、ChartHash.OfFile(text)
+  LaneAlpha.cs               #LANE_ALPHA 的数据与求值
+  编辑器用（游戏不需要，见 Documentation~/Editor-API.md）：
+  TextSpan.cs TjaDiagnostic.cs TjaMessages.cs           位置与行列、诊断及其中日文
+  TjaAnalysis.cs ChartSourceMap.cs TjaDocument.cs        一块的分析、源码映射、文档版本
+  TjaSyntax.cs TjaSchema.cs TjaLint.cs                   语法 token、指令与头部表、编辑器检查
+  TjaCompletion.cs TjaHover.cs TjaSignatureHelp.cs TjaFolding.cs TjaSummary.cs
+  TjaQuickFix.cs TjaFormat.cs TjaRefactor.cs             补全、悬停、参数提示、折叠、摘要；修复、格式化、重构
+Documentation~/              TJA-Specification.md 语法规范；Editor-API.md 编辑器接口；IDE-Plan.md IDE 计划书；Parser-TODO.md 待办与记录
+Editors~/vscode/             VS Code 客户端（语言服务的测试客户端）
 dotnet~/                     Unity 忽略的目录：dotnet 工程
   OurTaiko.TjaParser/        netstandard2.1 类库，编译 ../../Runtime/**/*.cs
   tjaparser/                 net10 命令行工具
-  OurTaiko.TjaParser.Tests/  xunit 测试与 fixture
+  OurTaiko.TjaParser.LanguageServer/  tja-language-server（LSP）
+  OurTaiko.TjaParser.Tests/  xunit 测试与 fixture（golden 差分、fuzz、各功能）
+  OurTaiko.TjaParser.Benchmarks/      BenchmarkDotNet 基准（解析与编辑器）
+  Corpus/                    生成测试谱面（测试与基准共用）
+  tools/diff-corpus.sh       两个版本对整个谱库的 inspect 差分
 ```
 
 `Runtime/` 下的文件就是游戏仓库 `Assets/OurTaiko/Runtime/Core` 里对应文件的唯一版本；游戏改为引用本包后不再各自保留副本。
@@ -79,6 +92,8 @@ cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # �
 ```
 
 ## 编辑器接口（`TjaParser.Analyze`）
+
+完整说明与示例见 [`Documentation~/Editor-API.md`](Documentation~/Editor-API.md)，IDE 计划见 [`Documentation~/IDE-Plan.md`](Documentation~/IDE-Plan.md)。
 
 给谱面 IDE 用，游戏与服务器仍用 `TjaParser.Parse`（不记录这些，行为与分配不变）。`TjaParser.Analyze(text, course, side)` 返回 `TjaAnalysis`：
 
