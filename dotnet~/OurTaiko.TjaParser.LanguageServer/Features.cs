@@ -145,8 +145,12 @@ public sealed partial class Server
                     foreach (var d in document.Diagnostics(cancel))
                         if (d.Span.Start <= range.End && range.Start <= d.Span.End)
                             foreach (var action in TjaQuickFix.For(document, d)) Offer(action);
-                    if (document.BlockAt(range.Start) is TjaDocumentBlock here && TjaQuickFix.InlineBalloons(document, here.Course, here.Side, cancel) is TjaCodeAction inline)
-                        Offer(inline);
+                    if (document.BlockAt(range.Start) is TjaDocumentBlock here)
+                    {
+                        if (TjaRefactor.Split(document, here.Course, here.Side, range.Start, cancel) is TjaCodeAction split) Offer(split);
+                        if (TjaRefactor.Join(document, here.Course, here.Side, range.Start, cancel) is TjaCodeAction join) Offer(join);
+                        if (TjaQuickFix.InlineBalloons(document, here.Course, here.Side, cancel) is TjaCodeAction inline) Offer(inline);
+                    }
                     result = actions;
                 }
                 break;
