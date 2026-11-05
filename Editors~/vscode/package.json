@@ -5,17 +5,31 @@
   "version": "0.1.0",
   "publisher": "ourtaiko",
   "license": "GPL-3.0-or-later",
-  "repository": { "type": "git", "url": "https://github.com/OurTaiko/TJAParser.git" },
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Programming Languages"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OurTaiko/TJAParser.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
   "main": "./extension.js",
-  "activationEvents": ["onLanguage:tja"],
+  "activationEvents": [
+    "onLanguage:tja"
+  ],
   "contributes": {
     "languages": [
       {
         "id": "tja",
-        "aliases": ["TJA", "tja"],
-        "extensions": [".tja"],
+        "aliases": [
+          "TJA",
+          "tja"
+        ],
+        "extensions": [
+          ".tja"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -26,6 +40,75 @@
           "type": "string",
           "default": "",
           "description": "The language server: tja-language-server on PATH when empty; a path to its executable, or to tja-language-server.dll (run with dotnet)."
+        }
+      }
+    },
+    "semanticTokenScopes": [
+      {
+        "language": "tja",
+        "scopes": {
+          "don": [
+            "keyword.control.don.tja"
+          ],
+          "ka": [
+            "entity.name.function.ka.tja"
+          ],
+          "bigDon": [
+            "keyword.control.don.big.tja"
+          ],
+          "bigKa": [
+            "entity.name.function.ka.big.tja"
+          ],
+          "roll": [
+            "string.roll.tja"
+          ],
+          "balloon": [
+            "constant.numeric.balloon.tja"
+          ],
+          "kadon": [
+            "storage.type.kadon.tja"
+          ],
+          "mine": [
+            "invalid.mine.tja"
+          ],
+          "adlib": [
+            "comment.adlib.tja"
+          ],
+          "blank": [
+            "comment.blank.tja"
+          ],
+          "rollEnd": [
+            "string.roll.end.tja"
+          ],
+          "unknownNote": [
+            "invalid.illegal.tja"
+          ]
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "[tja]": {
+        "editor.semanticHighlighting.enabled": true
+      },
+      "editor.semanticTokenColorCustomizations": {
+        "rules": {
+          "don:tja": "#e8513d",
+          "bigDon:tja": {
+            "foreground": "#e8513d",
+            "bold": true
+          },
+          "ka:tja": "#4aa8d8",
+          "bigKa:tja": {
+            "foreground": "#4aa8d8",
+            "bold": true
+          },
+          "roll:tja": "#e5c33f",
+          "rollEnd:tja": "#e5c33f",
+          "balloon:tja": "#f08a3c",
+          "kadon:tja": "#a768d8",
+          "mine:tja": "#7f7f7f",
+          "adlib:tja": "#9fa8b0",
+          "blank:tja": "#6b7178"
         }
       }
     }

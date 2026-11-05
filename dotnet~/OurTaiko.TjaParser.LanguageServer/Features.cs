@@ -10,6 +10,13 @@ public sealed partial class Server
     {
         capabilities["completionProvider"] = new JsonObject { ["triggerCharacters"] = new JsonArray("#", ":", " ") };
         capabilities["hoverProvider"] = true;
+        capabilities["foldingRangeProvider"] = true;
+        var types = new JsonArray();
+        foreach (string type in SemanticTokens.Types) types.Add(type);
+        capabilities["semanticTokensProvider"] = new JsonObject
+        {
+            ["legend"] = new JsonObject { ["tokenTypes"] = types, ["tokenModifiers"] = new JsonArray() }, ["full"] = true,
+        };
         capabilities["signatureHelpProvider"] = new JsonObject
         {
             ["triggerCharacters"] = new JsonArray(" ", ","), ["retriggerCharacters"] = new JsonArray(" ", ","),
@@ -38,6 +45,29 @@ public sealed partial class Server
                         }),
                         ["activeSignature"] = 0, ["activeParameter"] = signature.Active,
                     };
+                }
+                break;
+            case "textDocument/semanticTokens/full":
+                handled = true;
+                if (documents.TryGetValue((string)p["textDocument"]["uri"], out document))
+                {
+                    var data = new JsonArray();
+                    foreach (int n in SemanticTokens.Encode(document)) data.Add(n);
+                    result = new JsonObject { ["data"] = data };
+                }
+                break;
+            case "textDocument/foldingRange":
+                handled = true;
+                if (documents.TryGetValue((string)p["textDocument"]["uri"], out document))
+                {
+                    var ranges = new JsonArray();
+                    foreach (var range in TjaFolding.Ranges(document))
+                        ranges.Add(new JsonObject
+                        {
+                            ["startLine"] = range.StartLine - 1, ["endLine"] = range.EndLine - 1,
+                            ["kind"] = range.Kind == TjaFoldingKind.Comment ? "comment" : "region",
+                        });
+                    result = ranges;
                 }
                 break;
             case "textDocument/hover":
