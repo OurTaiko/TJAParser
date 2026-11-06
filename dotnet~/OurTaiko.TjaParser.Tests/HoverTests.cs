@@ -28,7 +28,7 @@ public class HoverTests
                     Assert.Same(note, hover.Note);
                     Assert.False(hover.Tail);
                     Assert.Equal(span, hover.Span);
-                    Assert.Contains("Time " + note.Time.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " s", hover.Markdown);
+                    Assert.Contains("Time " + note.Time.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture) + " s", hover.Markdown);
                     Assert.True(hover.Measure.Span.Contains(span.Start));
                     // The slot: the note characters written before it in its measure, comments aside.
                     int slot = syntax.Count(t => t.Span.Start >= hover.Measure.Span.Start && t.Span.Start < span.Start

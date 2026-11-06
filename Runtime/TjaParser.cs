@@ -201,12 +201,79 @@ namespace OurTaiko
         sealed class TimingState
         {
             // RawMs and Clock16 are OpenTaiko's dbNowTime and dbNowBMScollTime: milliseconds from
-            // #START and sixteenth notes, accumulated in its order of operations.
+            // #START and sixteenth notes. OpenTaiko adds a slot's length at every slot, so the
+            // rounding of each addition piles up and the same rhythm written on another grid ends
+            // up elsewhere (by 7 millionths of a millisecond over 600 measures: enough to move a
+            // time to the next point of its grid, and every beat clock in its last digits). Here a
+            // place is its run's start plus the run's share of the measure, in one multiplication
+            // and one division, and the starts are summed with what each sum loses carried over.
             public double RawMs, Beat, Bpm, Measure = 1, ScrollX = 1, ScrollY, Clock16;
             public double SuddenShow = double.PositiveInfinity, SuddenMove = double.PositiveInfinity;
             public bool Barline = true, Gogo;
             public ScrollMode Mode;
-            public TimingState Copy() => (TimingState)MemberwiseClone();
+            public TimingState Copy()
+            {
+                var copy = (TimingState)MemberwiseClone();
+                copy.start = (double[])start.Clone(); copy.lost = (double[])lost.Clone(); copy.runWhole = (double[])runWhole.Clone();
+                return copy;
+            }
+
+            // Where the run began (RawMs, Beat, Clock16 there) with what each of those sums lost.
+            double[] start = new double[3], lost = new double[3];
+            // The run: slots read one after another at one BPM and measure length, of a measure
+            // divided in runSlots. Whole measures of it are runWhole long (ms, beats, sixteenths).
+            double[] runWhole = new double[3];
+            double runBpm, runMeasure;
+            int runSlots, runCount;
+
+            // The cursor moves one slot of a measure divided in `slots`.
+            public void Step(int slots)
+            {
+                if (runCount == 0 || slots != runSlots || Bpm != runBpm || Measure != runMeasure)
+                {
+                    End();
+                    runSlots = slots; runBpm = Bpm; runMeasure = Measure;
+                    runWhole[0] = 15000.0 / Bpm * Measure * 16.0; runWhole[1] = 4 * Measure; runWhole[2] = Measure * 16.0;
+                }
+                runCount++;
+                RawMs = Sum(0, Part(0), out _); Beat = Sum(1, Part(1), out _); Clock16 = Sum(2, Part(2), out _);
+            }
+
+            // The cursor moves by a length of its own: an empty measure, a #DELAY.
+            public void Move(double ms, double beats, double sixteenths)
+            {
+                End();
+                RawMs = start[0] = Sum(0, ms, out lost[0]);
+                Beat = start[1] = Sum(1, beats, out lost[1]);
+                Clock16 = start[2] = Sum(2, sixteenths, out lost[2]);
+            }
+
+            // A whole measure at the BPM and length in force.
+            public void MoveMeasure() => Move(15000.0 / Bpm * Measure * 16.0, 4 * Measure, Measure * 16.0);
+
+            // The run ends where the cursor is: at its measure's end, or where the BPM, the measure
+            // length or a delay comes between two slots.
+            public void End()
+            {
+                if (runCount == 0) return;
+                for (int i = 0; i < 3; i++) start[i] = Sum(i, Part(i), out lost[i]);
+                runCount = 0;
+            }
+
+            // The run's share of the measure. A measure read in one run is exactly its length,
+            // however many slots it has, so bar lines do not depend on the grid. Beats and
+            // sixteenths are a measure length (a quotient of two floats) times whole numbers:
+            // the product is exact and the division rounds once, so they do not either.
+            double Part(int i) => runCount == runSlots ? runWhole[i] : runWhole[i] * runCount / runSlots;
+
+            // start[i] + x with what the sums before it lost, and what this one loses (Knuth's
+            // two-sum: exact whatever the sizes of the two).
+            double Sum(int i, double x, out double loses)
+            {
+                double s = start[i], y = x + lost[i], t = s + y, b = t - s, a = t - b;
+                loses = (s - a) + (y - b);
+                return t;
+            }
         }
 
         // One block of a file, read in two passes: the lines up to the block's #END (headers in
@@ -241,9 +308,10 @@ namespace OurTaiko
             sealed class Captured : Exception { }
             // The note slot being read in the measure, and how many it has (0, 0 between measures).
             int slot, slotCount;
-            long offsetMs;
-            // The cursor's time: OpenTaiko's (int)dbNowTime, shifted by OFFSET, in seconds.
-            double Now => ((long)state.RawMs - offsetMs) / 1000.0;
+            double offsetMs;
+            // The cursor's time: OpenTaiko's dbNowTime, shifted by OFFSET, in seconds on the grid
+            // of chart times (TjaTime.OnGrid). OpenTaiko cuts it to a whole millisecond instead.
+            double Now => TjaTime.OnGrid(state.RawMs - offsetMs);
             // Each route reads its own list in order. A common balloon takes the Normal list's
             // number (the one played on every route) and moves every route's place past it.
             List<int>[] balloons;
@@ -434,11 +502,12 @@ namespace OurTaiko
                     AtHeader(bpmLine, bpmSource);
                     if (ReadNumber(bpm, out double tempo)) chart.Bpm = tempo;
                 }
-                // OpenTaiko keeps OFFSET in whole milliseconds, cut toward zero.
+                // OFFSET to the grid of chart times. OpenTaiko cuts it to a whole millisecond, which
+                // also reads one in a hundred three-decimal values a millisecond off (-4.095 as -4094).
                 if (offset != null)
                 {
                     AtHeader(offsetLine, offsetSource);
-                    if (ReadNumber(offset, out double seconds)) chart.Offset = (int)(seconds * 1000) / 1000.0;
+                    if (ReadNumber(offset, out double seconds)) chart.Offset = TjaTime.OnGrid(seconds * 1000);
                 }
                 if (!(chart.Bpm > 0) || double.IsInfinity(chart.Bpm))
                 {
@@ -448,7 +517,7 @@ namespace OurTaiko
                     chart.Bpm = 120;
                 }
 
-                offsetMs = (long)Math.Round(chart.Offset * 1000);
+                offsetMs = TjaTime.Millis(chart.Offset);
                 state = new TimingState { Bpm = chart.Bpm, Mode = startMode };
                 chart.NoteLists.Add(common);
                 AddClockPoint();
@@ -701,7 +770,7 @@ namespace OurTaiko
             // the branch itself.
             double JudgeTime(bool waitForRolls)
             {
-                double judge = lastBar.Max() ?? ((long)(-240000.0 / chart.Bpm) - offsetMs) / 1000.0;
+                double judge = lastBar.Max() ?? TjaTime.OnGrid(-240000.0 / chart.Bpm - offsetMs);
                 double? rollEnd = rollEndAfterBar.Max();
                 if (waitForRolls && rollEnd > judge) judge = Math.Min(rollEnd.Value, Now);
                 return judge;
@@ -910,12 +979,11 @@ namespace OurTaiko
             {
                 if (!TjaNumber.TryParse(arg, out double delay) || double.IsNaN(delay) || double.IsInfinity(delay)) return false;
                 double start = Now;
-                state.RawMs += delay * 1000;
+                // The beat clock keeps running through a delay (OpenTaiko dbNowBMScollTime).
+                state.Move(delay * 1000, 0, delay * 1000 * state.Bpm / 15000);
                 var tempo = new ChartTempo { Time = start, ResumeTime = Now, Beat = state.Beat, Bpm = state.Bpm, BranchId = BranchId, Route = route };
                 chart.Tempos.Add(tempo);
                 map?.Add(tempo, span);
-                // The beat clock keeps running through a delay (OpenTaiko dbNowBMScollTime).
-                state.Clock16 += delay * 1000 * state.Bpm / 15000;
                 return true;
             }
 
@@ -1066,9 +1134,7 @@ namespace OurTaiko
                         if (note.IsLong) for (int r = FirstRoute, last = LastRoute; r <= last; r++) openRoll[r] = note;
                     }
                     advance:
-                    state.RawMs += 15000.0 / state.Bpm * state.Measure * (16.0 / slots);
-                    state.Beat += 4.0 * state.Measure / Math.Max(1, slots);
-                    state.Clock16 += state.Measure * (16.0 / slots);
+                    state.Step(slots);
                     index++;
                 }
                 // The comma: the measure's slots are all read.
@@ -1080,10 +1146,9 @@ namespace OurTaiko
                     bar = AddBar();
                     barStart = span.Start;
                     barLength = state.Measure;
-                    state.RawMs += 15000.0 / state.Bpm * state.Measure * 16.0;
-                    state.Beat += 4 * state.Measure;
-                    state.Clock16 += state.Measure * 16.0;
+                    state.MoveMeasure();
                 }
+                state.End();
                 chart.Duration = Math.Max(chart.Duration, Now);
                 var measureSpan = TextSpan.FromBounds(barStart, atComma ? commaSpan.End : span.End);
                 map?.Add(bar, measureSpan);

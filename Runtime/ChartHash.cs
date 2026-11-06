@@ -24,7 +24,7 @@ namespace OurTaiko
         public bool Ok => Hash != null;
     }
 
-    // The content hash of a chart block: "v1:" + SHA-256 (hex) of ChartCanonical.Write over the
+    // The content hash of a chart block: "v2:" + SHA-256 (hex) of ChartCanonical.Write over the
     // chart TjaParser produces. Two files whose block plays the same get the same hash, whatever
     // their titles, comments or spelling; the servers use it to tell whether scores, dan courses
     // and local records still belong to the current chart (OurTaikoLogs/TJAParser).

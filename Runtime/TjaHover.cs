@@ -146,7 +146,7 @@ namespace OurTaiko
         }
 
 
-        static string Seconds(double s, string language) => s.ToString("0.###", CultureInfo.InvariantCulture) + TjaText.Pick(language, " s", " 秒", " 秒");
+        static string Seconds(double s, string language) => s.ToString("0.######", CultureInfo.InvariantCulture) + TjaText.Pick(language, " s", " 秒", " 秒");
         static string Number(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
     }
 }

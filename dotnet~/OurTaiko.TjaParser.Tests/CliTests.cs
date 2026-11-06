@@ -49,6 +49,6 @@ public class CliTests
     {
         var (code, output, _) = Run(Tja.Sample, "hash");
         Assert.Equal(0, code);
-        Assert.StartsWith("{\"version\":1,\"prefix\":\"v1:\",\"blocks\":[", output);
+        Assert.StartsWith("{\"version\":2,\"prefix\":\"v2:\",\"blocks\":[", output);
     }
 }

@@ -10,8 +10,8 @@ public class HashTests
     public void HashesCarryTheVersionAndSixtyFourHexDigits()
     {
         foreach (var block in ChartHash.OfFile(Tja.Sample))
-            Assert.Matches("^v1:[0-9a-f]{64}$", block.Hash);
-        Assert.Equal("v1:", ChartHash.Prefix);
+            Assert.Matches("^v2:[0-9a-f]{64}$", block.Hash);
+        Assert.Equal("v2:", ChartHash.Prefix);
     }
 
     [Theory]
@@ -138,7 +138,7 @@ public class HashTests
     public void TheCanonicalTextNamesNoTitleOrLevel()
     {
         string canonical = ChartCanonical.Write(TjaParser.Parse(Tja.Sample, "Oni", "single"));
-        Assert.StartsWith("tjaparser-canonical 1\n", canonical);
+        Assert.StartsWith("tjaparser-canonical 2\n", canonical);
         Assert.DoesNotContain("Test Song", canonical);
         Assert.DoesNotContain("Someone", canonical);
         Assert.DoesNotContain("Oni", canonical);

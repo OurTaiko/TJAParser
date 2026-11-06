@@ -20,8 +20,9 @@ namespace OurTaiko
     {
         public NoteKind Kind;
         public double Time, EndTime, Beat, Bpm, ScrollX = 1, ScrollY, TailBpm;
-        // OpenTaiko's dbNowTime at the note: milliseconds from #START, not cut to whole
-        // milliseconds as Time is (#DELAY included, OFFSET not). For analysis of note spacing
+        // OpenTaiko's dbNowTime at the note: milliseconds from #START, not put on the grid of
+        // chart times as Time is (#DELAY included, OFFSET not), and without the rounding its
+        // slot-by-slot sum piles up (TjaParser's TimingState). For analysis of note spacing
         // (the servers' difficulty constants); play and the content hash use Time.
         public double RawMs;
         public ScrollMode ScrollMode;
@@ -132,8 +133,8 @@ namespace OurTaiko
     // every route: the chart's start, each common #BPMCHANGE, and every branch's start and end.
     public sealed class ChartClockPoint
     {
-        // Time is on whole milliseconds (compared as OpenTaiko does); RawMs is OpenTaiko's
-        // unrounded bpm_change_time from #START, which the clock runs from.
+        // Time is on the grid of chart times (compared by its whole millisecond, as OpenTaiko
+        // does); RawMs is OpenTaiko's unrounded bpm_change_time from #START, which the clock runs from.
         public double Time, RawMs, Clock, Bpm;
         public int BranchId = -1;
         public BranchRoute Route;

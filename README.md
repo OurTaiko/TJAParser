@@ -59,7 +59,7 @@ cd dotnet~ && dotnet build TJAParser.slnx && dotnet test TJAParser.slnx
 tjaparser hash <file|->                       游戏能列出的块：course、side、level、branching 与哈希（JSON）
 tjaparser inspect <file|->                    头部元数据 + 文件里每个 #START 块 + 已列出块的哈希与各路线音符（JSON），服务器登记谱面用
 tjaparser canonical <file|-> [course] [side]  某一块被哈希的规范文本（排查两份谱面为何不同）
-tjaparser version                             算法版本，如 v1
+tjaparser version                             算法版本，如 v2
 ```
 
 `inspect` 让两站不再自己解析 TJA。头部：`titles`／`subtitles` 两个字典，键 `origin` 是 `TITLE`／`SUBTITLE` 原样（副标题带 `--`），其余键是语言码 en/ja/ko/zh/zh_tw，值原样——服务器整份存、整份返回，客户端自己按语言挑；另有 `maker`、`genre`、`notesDesigners`、`bpm`、`offset`、`demoStart`、`wave`、`movie`、`movieOffset`。`blocks`：文件顺序，每块 `line`、`course` 原文、`name` 归一后的难度名、`side`、`player`、`style`、`level`、`branching`、`hasNotes`、`maker`，以及 `hash` 或 `error`、`warnings`。能解析的块另有 `notes`：玩家在每条路线上要打的咚／咔（1–4，连打与气球不算）按时间排列，`{"<路线>":{"ms":[…],"kinds":[…]}}`，无分歧的块只有 `unbranched`，分歧块有 `normal`／`expert`／`master`（共通段加上每个分歧在该路线实际演奏的那条，缺 `#E` 用 `#N`、缺 `#M` 用 `#E`，与游戏 `ResolveRoute` 相同）。`ms` 是 `ChartNote.RawMs`：从 `#START` 起的毫秒数，含 `#DELAY`、不含 OFFSET、不取整（`Time` 是取整到毫秒的游玩时刻）。两站用它计算难度定数的原始值（`OurTaikoLogs/Fanmade/docs/2026-10-25-difficulty-constants.md`）；它不进规范文本，哈希不变。
@@ -74,15 +74,15 @@ tjaparser version                             算法版本，如 v1
 
 轨道背景透明度 `#LANE_ALPHA <target>[%] [ms]`（OpenTaiko 没有，本库扩展）：`target` 是 0–100 的百分比；`ms` 可省（默认 0，立即切换），向零取整到毫秒，正数从指令处起在这么长时间内线性过渡，负数从「指令处 + ms」过渡到指令处。结果在 `TaikoChart.LaneAlphas`（`ChartLaneAlpha`：`Time`、`StartTime`、`EndTime`、`Alpha` 0–1、`BranchId`／`Route`，按 `StartTime` 排序），`LaneAlpha.At(…)` 是求某时刻透明度的参考实现（初始不透明，最后开始的指令接管、从当时的值过渡）。缺参数、读不出、超出 0–100 或多了参数：丢弃并记警告。它只是外观，不进规范文本，哈希不变。
 
-音符在轨道上的位置：`NoteScroll.Distance(note, time, clocks, travel)` 给出音符此刻离判定点的横纵距离（`travel` 是一小节在轨道上的长度，Nijiiro 版式为 `NoteScroll.MeasureWidth` 1440），`TailDistance` 是连打尾，`Appeared` 判断 `#SUDDEN` 的音符是否已出现；BM／HB 滚动按 `ScrollClockTimeline`（每条路线的拍子时钟）移动。时刻按整毫秒比较、位置向零取整到整像素，与 OpenTaiko 相同。2026-11-05 从 OurTaikoPlay 原样移入（游戏、View_Web 与 CharTaiko 原来各有一份相同的副本）；它只读 `TaikoChart`，不参与解析与哈希，别的格式读成 `TaikoChart` 后同样适用。
+音符在轨道上的位置：`NoteScroll.Distance(note, time, clocks, travel)` 给出音符此刻离判定点的横纵距离（`travel` 是一小节在轨道上的长度，Nijiiro 版式为 `NoteScroll.MeasureWidth` 1440），`TailDistance` 是连打尾，`Appeared` 判断 `#SUDDEN` 的音符是否已出现；BM／HB 滚动按 `ScrollClockTimeline`（每条路线的拍子时钟）移动。游戏时钟按整毫秒读、位置向零取整到整像素，与 OpenTaiko 相同；音符自己的时刻在 0.001 毫秒的格上，不截到整毫秒（`TjaTime`）。2026-11-05 从 OurTaikoPlay 原样移入（游戏、View_Web 与 CharTaiko 原来各有一份相同的副本）；它只读 `TaikoChart`，不参与解析与哈希，别的格式读成 `TaikoChart` 后同样适用。
 
 完整语法规范（含 `#LANE_ALPHA` 的游戏接入要求）见 [`Documentation~/TJA-Specification.md`](Documentation~/TJA-Specification.md)。
 
 输入必须是 UTF-8（可带 BOM）；后端先做自己的 UTF-8 规范化再调用。退出码：0 完成（解析失败的块在 JSON 里带 `error`、无 `hash`），2 用法错误，3 读不到输入或不是 UTF-8，4 文件被拒绝（`hash`、`inspect`）或 `canonical` 指定的块不存在或解析失败。
 
 ```json
-{"version":1,"prefix":"v1:","blocks":[
-  {"course":"Oni","side":"single","level":10,"branching":false,"hash":"v1:848c…9a47"},
+{"version":2,"prefix":"v2:","blocks":[
+  {"course":"Oni","side":"single","level":10,"branching":false,"hash":"v2:848c…9a47"},
   {"course":"Edit","side":"p1","level":10,"branching":true,"error":"Long note is missing its 8 tail …"}]}
 ```
 
@@ -141,7 +141,7 @@ cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # �
 
 ## 规范文本与哈希
 
-`ChartCanonical.Write(chart)` 把 `TjaParser.Parse` 产出的 `TaikoChart` 写成固定顺序、固定写法的文本，`ChartHash.Of` 对其 UTF-8 字节求 SHA-256，前缀 `v1:`。原则是**只写玩到的**：BPM、MEASURE、SCROLL 怎么写都不影响，只要每个物件的真实时间和在屏幕上的流动速度相同，哈希就相同。
+`ChartCanonical.Write(chart)` 把 `TjaParser.Parse` 产出的 `TaikoChart` 写成固定顺序、固定写法的文本，`ChartHash.Of` 对其 UTF-8 字节求 SHA-256，前缀 `v2:`（`v2` 起时刻四舍五入到 0.001 毫秒，不再截到整毫秒；位置不再逐格累加；节拍时钟写到小数 12 位。同一张谱换格数写法，三种滚动方式下哈希都相同，见规范 5.2、5.3）。原则是**只写玩到的**：BPM、MEASURE、SCROLL 怎么写都不影响，只要每个物件的真实时间和在屏幕上的流动速度相同，哈希就相同。
 
 写进去的：时长；每个音符与小节线的种类、时刻、结束时刻、运动方式（普通滚动写速度 = BPM × SCROLL 的横纵两个积；BM/HB 滚动写头尾的节拍时钟与有效 SCROLL）、SUDDEN 两个时刻、气球数、所属分歧与路线、是否显示、是否分歧首小节；分歧的条件、阈值、大音符限定、l 范围、LEVELHOLD、路线映射、各路线首个物件；SECTION、JPOSSCROLL、GOGO、LEVELHOLD；BPM 时间线只在谱面含 BM/HB 物件时写（同一时刻只留最后一点、BPM 不变的点去掉）；以及游戏实际遍历的 NoteLists（公共段与每条路线）。
 

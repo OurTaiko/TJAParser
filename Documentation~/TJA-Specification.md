@@ -1,6 +1,6 @@
 # OurTaiko TJA 语法规范
 
-本文是 TJAParser（`OurTaiko/TJAParser`，命名空间 `OurTaiko`）所接受的 TJA 格式的完整规范，**以代码为准**整理自 `Runtime/` 下的实现（main `8a2c002`，2026-11-04，哈希算法 `v1`）。游戏 OurTaikoPlay、OurTaikoView_Web 和两站后端（Fanmade、OurTaikoDatabase）用的都是这一份解析器，所以这里写的就是四处共同的行为。
+本文是 TJAParser（`OurTaiko/TJAParser`，命名空间 `OurTaiko`）所接受的 TJA 格式的完整规范，**以代码为准**整理自 `Runtime/` 下的实现（main `8a2c002`，2026-11-04；时刻一节按 2026-11-06 的哈希算法 `v2`）。游戏 OurTaikoPlay、OurTaikoView_Web 和两站后端（Fanmade、OurTaikoDatabase）用的都是这一份解析器，所以这里写的就是四处共同的行为。
 
 规范与代码不一致时以代码为准，并应修正本文。改变解析结果的改动须同时更新本文和 `README.md`，并按第 12 节的版本规则处理哈希。
 
@@ -100,7 +100,7 @@ CRLF、单独的 CR、LF 都算一个换行（与 OpenTaiko 相同）。行号�
 | `TITLEEN` `TITLEJA` `TITLEJP` `TITLEKO` `TITLEZH` `TITLECN` `TITLEZH_CN` `TITLEZH-CN` `TITLETW` `TITLEZH_TW` `TITLEZH-TW` | SongInfo | 译名，键分别归一为 `en` `ja` `ko` `zh` `zh_tw`；其他后缀忽略 |
 | `SUBTITLE`、`SUBTITLE` + 同上后缀 | 两者 | 同上，存入 `Subtitles`。显示时去掉开头的 `-` / `+`（`--` 隐藏、`++` 显示是选曲界面的约定）；`TaikoChart.Subtitle` 已去掉 |
 | `BPM` | 两者 | 实数（见 2.3）。`Parse` 只读对所选块生效的那个值（块结束前最后写的），它读不出会使块解析失败，别处读不出的不影响；最终值必须为正且有限，否则块解析失败 `BPM must be positive and finite.`。SongInfo 读不出时保留上一个值（默认 120） |
-| `OFFSET` | 两者 | 秒。`Parse` 按 OpenTaiko 先乘 1000 再向零取整为整毫秒：`(int)(x*1000)/1000`；与 BPM 一样，只有生效的值读不出才使块解析失败。正值使谱面提前（见 5.2） |
+| `OFFSET` | 两者 | 秒。`Parse` 把它放到 0.001 毫秒的格上（`TjaTime.OnGrid`，见 5.2；OpenTaiko 向零取整为整毫秒）；与 BPM 一样，只有生效的值读不出才使块解析失败。正值使谱面提前（见 5.2） |
 | `COURSE` | 两者 | 见第 3 节 |
 | `LEVEL` | 两者 | 星数，`(int)` 截断。不进哈希。所选块生效的 LEVEL 读不出时 **`Parse` 使块解析失败**，SongInfo 则当 0（见 14 节）；别的难度里的不影响 |
 | `BALLOON` `BALLOONNOR` `BALLOONEXP` `BALLOONMAS` | Parse | 气球打数列表，见 7.1 |
@@ -218,22 +218,40 @@ CRLF、单独的 CR、LF 都算一个换行（与 OpenTaiko 相同）。行号�
 一个物件的游玩时刻（`Time`，单位秒，相对音频开头）：
 
 ```
-Time = (trunc(RawMs) − round(OFFSET × 1000)) / 1000
+Time = round((RawMs − OFFSET × 1000) × 1000) / 1 000 000
 ```
 
-即 RawMs 先向零取整到毫秒（与 OpenTaiko 的整毫秒时钟相同），再减 OFFSET。所以 `OFFSET:-1` 使 `#START` 处在 1 秒。`ChartNote.RawMs` 另存未取整值（供定数计算，不进哈希）。
+即 RawMs 减去 OFFSET 后，四舍五入到最近的 0.001 毫秒（正好一半时远离零，`TjaTime.OnGrid`）；OFFSET 自己也先放到同一个格上。所以 `OFFSET:-1` 使 `#START` 处在 1 秒，170 BPM 的第二个十六分音符（88.2352941… 毫秒）在 0.088235 秒。`ChartNote.RawMs` 另存未取整值（供定数计算，不进哈希）。
+
+与 OpenTaiko 不同（哈希算法 `v2` 起，2026-11-06）：OpenTaiko 把时刻向零截到整毫秒。那样每个音符平均早 0.5 毫秒；OpenTaiko 的 RawMs 又是逐格累加的，同一段节奏换一种格数写法会累加出 99.99999… 或 100.00000…，截断后差 1 毫秒（150 BPM 的十六分音符写成 16 格与 48 格即如此），小节线和哈希跟着不同。放到 0.001 毫秒的格上后，误差在 ±0.0005 毫秒以内；位置也不再逐格累加（5.3），所以同一张谱换格数写法得到相同的时刻。
+
+游戏时钟仍按整毫秒读（`TjaTime.Ms`，向零截断，与 OpenTaiko 的 `(long)` 时钟相同）：`NoteScroll`、`ScrollClockTimeline.At16`、`JudgeShift.At` 都先把「现在」截到整毫秒；音符自己的时刻不截（`TjaTime.Millis`）。节拍时钟的 BPM 点与 `#JPOSSCROLL` 仍按各自时刻所在的整毫秒生效。
 
 ### 5.3 小节的推进
 
-一个小节有 `n` 个槽（`n ≥ 1`）时，每个槽后：
+一个小节有 `n` 个槽（`n ≥ 1`）时，整个小节长
 
 ```
-RawMs   += 15000 / Bpm × Measure × 16 / n
-Beat    += 4 × Measure / n
-Clock16 += Measure × 16 / n
+RawMs    240000 / Bpm × Measure   毫秒
+Beat     4 × Measure              拍
+Clock16  16 × Measure             十六分
 ```
 
-整个小节长 `240000 / Bpm × Measure` 毫秒。槽之间的指令在它所处的位置立即生效，所以小节中间的 `#BPMCHANGE` 只改变其后槽的长度。
+每个槽占其中的 `1 / n`。槽之间的指令在它所处的位置立即生效，所以小节中间的 `#BPMCHANGE` 只改变其后槽的长度。
+
+**怎么算**（`TjaParser` 的 `TimingState`，哈希算法 `v2` 起）：OpenTaiko 每读一个槽就加一次槽长，上万次加法的舍入误差越积越多（600 小节可到 7×10⁻⁶ 毫秒），同一段节奏换格数写法就落在不同的地方。本库把小节分成「段」：同一 BPM、同一小节长度下连续读的槽是一段，小节结束、`#BPMCHANGE`、`#MEASURE`、`#DELAY` 都结束当前的段。段内第 `k` 个槽之后的位置是
+
+```
+位置 = 段起点 + 整小节长度 × k / n        （一次乘、一次除；k = n 时直接加整小节长度）
+```
+
+段起点之间用补偿求和（每次加法把舍掉的误差记下，下一次补回）。结果：
+
+- 一口气读完的小节正好推进一个小节长度，与格数无关，所以小节线不随格数变；
+- `Beat` 与 `Clock16` 是小节长度（两个 float 的商）乘整数再除一次，乘积没有误差，所以同一位置在任何格数下逐位相同；
+- `RawMs` 在不同格数下最多差最后一位，放到 0.001 毫秒的格上后相同。
+
+与 OpenTaiko 的 `dbNowTime` 相比，`RawMs` 相差在 10⁻⁶ 毫秒以内（它的累加误差）。
 
 **空小节**（只有 `,`，或只有指令再 `,`）：放一条小节线，并按 `Measure` 推进一整小节（相当于 16 个十六分）。
 
@@ -433,7 +451,7 @@ Clock16 += Measure × 16 / n
 
 ### 8.3 判定时刻
 
-`ChartBranch.DecisionTime`（与 OpenTaiko `GetBranchJudgeChipTime` 相同）：分歧前最后一条小节线的时刻（即 `#BRANCHSTART` 前一个小节的开头）；没有小节线时为谱面开头前四拍（按头部 BPM：`trunc(−240000 / BPM) − OFFSET` 毫秒）。条件是 `r`/`rb` 时，若最后那个小节里有长音符在判定时刻之后结束，则等到它结束（不晚于分歧起点）。
+`ChartBranch.DecisionTime`（与 OpenTaiko `GetBranchJudgeChipTime` 相同）：分歧前最后一条小节线的时刻（即 `#BRANCHSTART` 前一个小节的开头）；没有小节线时为谱面开头前四拍（按头部 BPM：`−240000 / BPM − OFFSET` 毫秒，同样放到 0.001 毫秒的格上）。条件是 `r`/`rb` 时，若最后那个小节里有长音符在判定时刻之后结束，则等到它结束（不晚于分歧起点）。
 
 ### 8.4 路线的物件
 
@@ -453,7 +471,7 @@ Clock16 += Measure × 16 / n
 
 | 成员 | 内容 |
 |---|---|
-| `Title` `Subtitle` `Course` `Level` `Bpm` `Offset` | 头部（`Offset` 已截到整毫秒） |
+| `Title` `Subtitle` `Course` `Level` `Bpm` `Offset` | 头部（`Offset` 在 0.001 毫秒的格上） |
 | `Duration` | 见 5.5 |
 | `Notes` | 全部音符，按 `Time` 排序（`ChartNote`） |
 | `Bars` | 全部小节线，按 `Time` 排序（`Kind = 0`） |
@@ -492,6 +510,7 @@ Clock16 += Measure × 16 / n
 | `/* */` 块注释 | 扩展 |
 | 内联气球数 `7[n]` `9[n]` | 扩展 |
 | `#LANE_ALPHA` | 扩展 |
+| 时刻与 OFFSET | 四舍五入到 0.001 毫秒（OpenTaiko 向零截到整毫秒），见 5.2 |
 | G 的音符文字 | カドン（OpenTaiko 为 ドン(大)） |
 | Ad-Lib 在音符文字连段中 | 跳过（OpenTaiko 计入） |
 | 读不出的 `#BRANCHSTART` 条件 | 保留分歧、条件 None（OpenTaiko 丢弃整条） |
@@ -504,7 +523,7 @@ Clock16 += Measure × 16 / n
 
 ## 12. 规范文本与内容哈希
 
-`ChartCanonical.Write(chart)` 把 `TaikoChart` 写成固定顺序、固定写法的文本；`ChartHash.Of` 对其 UTF-8 字节求 SHA-256，前缀 `v1:`。原则是**只写玩到的**：BPM、MEASURE、SCROLL 怎么写都不影响，只要每个物件的真实时刻和流动速度相同，哈希就相同。
+`ChartCanonical.Write(chart)` 把 `TaikoChart` 写成固定顺序、固定写法的文本；`ChartHash.Of` 对其 UTF-8 字节求 SHA-256，前缀 `v2:`（`v1` 的时刻截到整毫秒，见 5.2）。原则是**只写玩到的**：BPM、MEASURE、SCROLL 怎么写都不影响，只要每个物件的真实时刻和流动速度相同，哈希就相同。BM/HB 物件的节拍时钟写到小数 12 位（以小节计）；它们按 5.3 的算法在任何格数写法下逐位相同，取整只为抹掉别的求和路径（一个小节写成两个、`#DELAY`）留下的末位差别。测试 `GridRewriteTests` 把随机谱面的每个小节换成 2～8 倍的格数，三种滚动方式下规范文本都逐行相同。
 
 **写入**：时长；每个音符与小节线的种类、时刻、结束时刻、运动方式（普通滚动写 BPM×SCROLL 的横纵两个积，四舍五入到小数 9 位；BM/HB 写头尾节拍时钟与有效 SCROLL）、SUDDEN 两个时刻、气球数、分歧与路线、是否显示、是否路线首小节；分歧的条件、阈值、大音符限定、`l`、LEVELHOLD、路线映射、各路线首个物件；SECTION、JPOSSCROLL、路线外 LEVELHOLD、GOGO；仅当有 BM/HB 物件时写 BPM 时间线；NoteLists。
 

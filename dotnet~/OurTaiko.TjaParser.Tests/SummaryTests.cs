@@ -46,7 +46,7 @@ public class SummaryTests
         Assert.Equal(11, summary.Combo["unbranched"]);
         Assert.Equal(4, summary.PeakPerSecond["unbranched"]);
         Assert.Equal(4, summary.Duration);
-        Assert.StartsWith("10 notes · max combo 11 · 4 s · peak 4/s · v1:", summary.Title);
+        Assert.StartsWith("10 notes · max combo 11 · 4 s · peak 4/s · v2:", summary.Title);
         var branched = TjaSummary.Blocks(new TjaDocument(Tja.Branching)).Single();
         // 1111, then N 1000, E 1010 or M 1111, then 2222.
         Assert.StartsWith("9/10/12 notes", branched.Title);

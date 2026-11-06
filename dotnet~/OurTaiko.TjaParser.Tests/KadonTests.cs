@@ -77,6 +77,6 @@ public class KadonTests
         Assert.Empty(chart.Warnings);
         var block = Assert.Single(ChartHash.OfFile(text));
         Assert.Null(block.Error);
-        Assert.StartsWith("v1:", block.Hash);
+        Assert.StartsWith("v2:", block.Hash);
     }
 }

@@ -132,12 +132,12 @@ public class NoteScrollTests
         var clocks = new ScrollClockTimeline(chart);
         var don = chart.Notes[0];
         var roll = chart.Notes[1];
-        // An eighth at 140 BPM: 214 ms → 214 × 140 / 240000 × 1302 = 162.5…
+        // An eighth at 140 BPM: 214.286 ms → 214.286 × 140 / 240000 × 1302 = 162.7…
         Assert.Equal((162.0, 0.0), NoteScroll.Distance(don, 0, clocks, Travel));
         Assert.Equal(162, NoteScroll.Distance(don, 0.0004, clocks, Travel).X);
-        Assert.Equal((0.857, 1.499), (roll.Time, roll.EndTime));
-        Assert.Equal(System.Math.Truncate(857 * 140 / 240000.0 * Travel), NoteScroll.Distance(roll, 0, clocks, Travel).X);
-        Assert.Equal(System.Math.Truncate(1499 * 140 / 240000.0 * Travel), NoteScroll.TailDistance(roll, 0, clocks, Travel).X);
+        Assert.Equal((0.857143, 1.5), (roll.Time, roll.EndTime));
+        Assert.Equal(System.Math.Truncate(857.143 * 140 / 240000.0 * Travel), NoteScroll.Distance(roll, 0, clocks, Travel).X);
+        Assert.Equal(System.Math.Truncate(1500 * 140 / 240000.0 * Travel), NoteScroll.TailDistance(roll, 0, clocks, Travel).X);
         var hb = Parse("#HBSCROLL\n#SCROLL 1-0.5i\n01,");
         Assert.Equal((System.Math.Truncate(0.5 * Travel), System.Math.Truncate(-0.25 * Travel)), NoteScroll.Distance(hb.Notes[0], 0, new ScrollClockTimeline(hb), Travel));
     }

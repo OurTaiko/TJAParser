@@ -31,8 +31,10 @@ namespace OurTaiko
         }
 
         // A note's distance from the judge on both axes, as OpenTaiko places it for its scroll mode
-        // (UpdateScrolledChipPosition, NotesManager.GetNoteX/Y): in whole milliseconds and cut to
-        // whole pixels. NM by its own time and BPM; BM and HB by the beat clock in sixteenths, BM
+        // (UpdateScrolledChipPosition, NotesManager.GetNoteX/Y): the clock in whole milliseconds,
+        // the distance cut to whole pixels. The note's own time is not cut to a whole millisecond
+        // as OpenTaiko's is (TjaTime).
+        // NM by its own time and BPM; BM and HB by the beat clock in sixteenths, BM
         // with SCROLL 1 and no vertical part, HB with its SCROLL.
         // #SUDDEN: until the note starts to move its horizontal place stays where it will start;
         // the vertical part moves as usual (TJAP3, kept by OpenTaiko).
@@ -56,13 +58,15 @@ namespace OurTaiko
             => !(note.SuddenHidesRoll && note.IsLong) && currentTime >= note.Time - note.SuddenShow;
 
         static bool Standing(ChartNote note, double currentTime)
-            => !double.IsPositiveInfinity(note.SuddenMove) && TjaTime.Ms(currentTime) < TjaTime.Ms(note.Time) - TjaTime.Ms(note.SuddenMove);
+            => !double.IsPositiveInfinity(note.SuddenMove) && TjaTime.Ms(currentTime) < TjaTime.Millis(note.Time) - TjaTime.Ms(note.SuddenMove);
 
         // `time`/`clock` are the head's or the tail's; `standing` moves it as from the head's start.
         static (double X, double Y) Place(ChartNote note, double currentTime, ScrollClockTimeline clocks, double travel,
             double time, double clock, bool standing)
         {
-            long now = TjaTime.Ms(currentTime), head = TjaTime.Ms(note.Time), at = TjaTime.Ms(time);
+            // The clock in whole milliseconds; the note where it is, to a thousandth of one.
+            long now = TjaTime.Ms(currentTime);
+            double head = TjaTime.Millis(note.Time), at = TjaTime.Millis(time);
             if (note.ScrollMode == ScrollMode.Normal)
             {
                 double ms = at - now;

@@ -14,11 +14,11 @@ namespace OurTaiko
     public sealed class ScrollClockTimeline
     {
         readonly ChartClockPoint[][] routes = new ChartClockPoint[3][];
-        readonly long offsetMs;
+        readonly double offsetMs;
 
         public ScrollClockTimeline(TaikoChart chart)
         {
-            offsetMs = (long)Math.Round(chart.Offset * 1000);
+            offsetMs = TjaTime.Millis(chart.Offset);
             // A chart built without TjaParser has no points: its clock starts at 0 s.
             var points = chart.ScrollClocks.Count > 0 ? chart.ScrollClocks.ToArray()
                 : new[] { new ChartClockPoint { RawMs = offsetMs, Bpm = chart.Bpm } };
@@ -45,7 +45,7 @@ namespace OurTaiko
                 else high = mid;
             }
             var point = points[Math.Max(0, low - 1)];
-            return point.Clock * 16 + ((double)(now + offsetMs) - point.RawMs) * point.Bpm / 15000.0;
+            return point.Clock * 16 + (now + offsetMs - point.RawMs) * point.Bpm / 15000.0;
         }
 
         // The span of times during which the route's clock is within [from, to]. Where the clock

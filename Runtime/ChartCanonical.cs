@@ -17,7 +17,10 @@ namespace OurTaiko
     // TjaParser puts in a TaikoChart, changes every hash: bump Version and recompute stored hashes.
     public static class ChartCanonical
     {
-        public const int Version = 1;
+        // 2: times on a grid of a thousandth of a millisecond (TjaTime.OnGrid), no longer cut to a
+        // whole one, and OFFSET to the same grid; places no longer added up slot by slot
+        // (TjaParser's TimingState); beat clocks written to twelve decimals.
+        public const int Version = 2;
 
         public static string Write(TaikoChart chart)
         {
@@ -36,7 +39,7 @@ namespace OurTaiko
             foreach (var br in chart.Branches)
             {
                 // The Normal row's pair, which is every row's in a chart from TJA. Rows that differ
-                // (fumen only) follow at the end of the line, so every TJA chart keeps its v1 text.
+                // (fumen only) follow at the end of the line, so a TJA chart's line is as it was before them.
                 w.Tag("br").I(br.Id).N(br.Time).N(br.EndTime).N(br.DecisionTime).I((int)br.Condition)
                     .N(br.ExpertThreshold(BranchRoute.Normal)).N(br.MasterThreshold(BranchRoute.Normal)).B(br.BigOnly).B(br.Less)
                     .B(br.HoldRoutes[0]).B(br.HoldRoutes[1]).B(br.HoldRoutes[2])
@@ -62,7 +65,7 @@ namespace OurTaiko
             bool byClock = chart.Notes.Concat(chart.Bars).Any(n => n.ScrollMode != ScrollMode.Normal);
             var clocks = byClock ? Timeline(chart.ScrollClocks) : new List<ChartClockPoint>();
             w.Section("clocks", clocks.Count);
-            foreach (var c in clocks) w.Tag("c").N(c.Time).N(c.Clock).N(c.Bpm).I(c.BranchId).I((int)c.Route).End();
+            foreach (var c in clocks) w.Tag("c").N(c.Time).N(Clock(c.Clock)).N(c.Bpm).I(c.BranchId).I((int)c.Route).End();
 
             // The played lists: the common part, then each route of each branch, as entries
             // referring to the notes and bars above (n = head, t = tail, b = bar).
@@ -84,13 +87,20 @@ namespace OurTaiko
             // Normal: speed across and down (NoteScroll.Place: ScrollX × BPM, ScrollY × BPM).
             if (n.ScrollMode == ScrollMode.Normal) w.S("nm").N(Speed(n.Bpm, n.ScrollX)).N(Speed(n.Bpm, n.ScrollY));
             // BM/HB: the beat clock at head and tail and the SCROLL it moves by (BM forces 1, 0).
-            else w.S(n.ScrollMode == ScrollMode.BMScroll ? "bm" : "hb").N(n.ScrollClock).N(n.EndScrollClock)
+            else w.S(n.ScrollMode == ScrollMode.BMScroll ? "bm" : "hb").N(Clock(n.ScrollClock)).N(Clock(n.EndScrollClock))
                 .N(n.ScrollMode == ScrollMode.BMScroll ? 1 : n.ScrollX).N(n.ScrollMode == ScrollMode.BMScroll ? 0 : n.ScrollY);
             w.N(n.SuddenShow).N(n.SuddenMove).I(n.BalloonHits).I(n.BranchId).I((int)n.Route).B(n.Display).B(n.IsBranchStart).End();
         }
 
         // BPM × SCROLL, rounded so that 120 × 1 and 240 × 0.5 (or 150 × 0.8) read the same.
         static double Speed(double bpm, double scroll) => Math.Round(bpm * scroll, 9);
+
+        // A beat clock, in measures, to twelve decimals. TjaParser places a note by its measure's
+        // start and its share of the measure, so the same rhythm on another grid has the same
+        // clock to the last bit; this takes the last digits off where sums of other lengths meet
+        // (a measure written as two, a #DELAY). Twelve, not fewer: a clock of the form k / 2ⁿ sits
+        // half way between two numbers of n − 1 decimals, where noise would send it either way.
+        static double Clock(double measures) => Math.Round(measures, 12);
 
         static List<ChartClockPoint> Timeline(List<ChartClockPoint> points)
         {

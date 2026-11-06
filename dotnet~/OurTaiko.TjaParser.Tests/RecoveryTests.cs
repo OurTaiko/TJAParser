@@ -56,7 +56,7 @@ public class RecoveryTests
     {
         // It still takes its slot: the second don is at 2/3 of the two-second measure.
         var a = TjaParser.Analyze(Block("1H1,\n"));
-        Assert.Equal(new[] { 0, 1.333 }, a.Chart.Notes.Select(n => n.Time));
+        Assert.Equal(new[] { 0, 1.333333 }, a.Chart.Notes.Select(n => n.Time));
         Assert.Equal(TjaDiagnosticKind.UnsupportedNote, Assert.Single(a.Diagnostics).Kind);
     }
 
