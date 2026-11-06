@@ -426,7 +426,9 @@ Clock16 += Measure × 16 / n
 | `s` | 分数 | 不区分大小写 |
 
 - 类型首字母大写（`P`、`R`、`JP`…）为「只算大音符」（`BigOnly`）；`s` 永远不是，`d` 永远是。
-- 第四个参数 `l`：达人阈值为上界（数值 < 达人阈值时进达人，`Less`）；`m` 接受，不改变行为。
+- 第四个参数 `l`：阈值为上界（数值 < 达人阈值时进达人，否则 < 玄人阈值时进玄人，`Less`）；`m` 接受，不改变行为。
+- 阈值存成 fumen 的形式 `ChartBranch.Thresholds[判定时所在路线, 0=玄人/1=达人]`，每条路线可以不同（fumen 的 NormalToMaster、AdvancedKeepAdvanced、MasterKeepMaster 等六个值）。TJA 只有一对，写进三行（`SameFromEveryRoute` 为真）。`ChartBranch.Choose(数值, 当前路线)` 按当前路线那一行先判达人、再判玄人。规范文本只写普通行那一对；三行不同（只会来自 fumen 等其他格式）时在该行末尾追加 `from` 与玄人行、达人行的四个值，所以 TJA 谱面的哈希不变。
+- 阈值只看判定时在哪条路线，不记得之前走过哪条；「经过某条路线就一直保持」靠 `#LEVELHOLD`（见 6.8 节），fumen 没有对应物。
 - 参数为空：条件为 `None`（保持当前路线），不警告。参数不足三个、阈值读不出、类型未知、第四参数不是 `l`/`m`：条件为 `None` 并警告（OpenTaiko 会丢弃整条指令，这里保留分歧本身）。
 
 ### 8.3 判定时刻
@@ -455,7 +457,7 @@ Clock16 += Measure × 16 / n
 | `Duration` | 见 5.5 |
 | `Notes` | 全部音符，按 `Time` 排序（`ChartNote`） |
 | `Bars` | 全部小节线，按 `Time` 排序（`Kind = 0`） |
-| `Branches` | `ChartBranch`：`Id`、`Time`、`EndTime`、`DecisionTime`、`Condition`、阈值、`BigOnly`、`Less`、`HoldRoutes`、`FirstEntries`、`Routes` |
+| `Branches` | `ChartBranch`：`Id`、`Time`、`EndTime`、`DecisionTime`、`Condition`、`Thresholds`（按判定时路线的 3×2 阈值）、`BigOnly`、`Less`、`HoldRoutes`、`FirstEntries`、`Routes` |
 | `Sections` | `#SECTION` |
 | `ScrollClocks` | 节拍时钟的 BPM 点（开头、每次 BPMCHANGE、每个分歧的起止） |
 | `JudgeMoves` | `#JPOSSCROLL`，已串联 |

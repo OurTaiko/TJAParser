@@ -748,7 +748,8 @@ namespace OurTaiko
                 // s is never big-only; d always is.
                 target.BigOnly = parts[0].ToLowerInvariant() == "d" || upper && condition != BranchCondition.Score;
                 target.Less = range == "l";
-                target.ExpertThreshold = expert; target.MasterThreshold = master;
+                // TJA has one pair for every route the player may be on.
+                target.SetThresholds(expert, master);
             }
 
             // The warnings' texts so far (TaikoChart.Warnings keeps each once).

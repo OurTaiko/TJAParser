@@ -35,11 +35,15 @@ namespace OurTaiko
             w.Section("branches", chart.Branches.Count);
             foreach (var br in chart.Branches)
             {
+                // The Normal row's pair, which is every row's in a chart from TJA. Rows that differ
+                // (fumen only) follow at the end of the line, so every TJA chart keeps its v1 text.
                 w.Tag("br").I(br.Id).N(br.Time).N(br.EndTime).N(br.DecisionTime).I((int)br.Condition)
-                    .N(br.ExpertThreshold).N(br.MasterThreshold).B(br.BigOnly).B(br.Less)
+                    .N(br.ExpertThreshold(BranchRoute.Normal)).N(br.MasterThreshold(BranchRoute.Normal)).B(br.BigOnly).B(br.Less)
                     .B(br.HoldRoutes[0]).B(br.HoldRoutes[1]).B(br.HoldRoutes[2])
                     .I((int)br.Routes[0]).I((int)br.Routes[1]).I((int)br.Routes[2]);
                 for (int r = 0; r < 3; r++) w.Ref(br.FirstEntries[r], notes, bars);
+                if (!br.SameFromEveryRoute)
+                    w.S("from").N(br.Thresholds[1, 0]).N(br.Thresholds[1, 1]).N(br.Thresholds[2, 0]).N(br.Thresholds[2, 1]);
                 w.End();
             }
 

@@ -71,14 +71,55 @@ namespace OurTaiko
     {
         public int Id;
         // DecisionTime: when OpenTaiko judges the condition, at or before Time (see TjaParser).
-        public double Time, EndTime, DecisionTime, ExpertThreshold, MasterThreshold;
+        public double Time, EndTime, DecisionTime;
         public BranchCondition Condition;
+        // The thresholds as fumen stores them, by the route being played when the condition is
+        // judged: Thresholds[from, 0] reaches 玄人 and Thresholds[from, 1] 達人. Each row can differ
+        // (fumen's NormalToMaster, AdvancedKeepAdvanced, MasterKeepMaster…), so a chart can send
+        // the same count to different routes depending on where the player is. A TJA #BRANCHSTART
+        // has one pair, which TjaParser writes into every row.
+        public readonly double[,] Thresholds = new double[3, 2];
+        public double ExpertThreshold(BranchRoute from) => Thresholds[(int)from, 0];
+        public double MasterThreshold(BranchRoute from) => Thresholds[(int)from, 1];
+        // Every route judged by the same pair, as in TJA.
+        public bool SameFromEveryRoute
+        {
+            get
+            {
+                for (int r = 1; r < 3; r++)
+                    if (!Same(Thresholds[r, 0], Thresholds[0, 0]) || !Same(Thresholds[r, 1], Thresholds[0, 1])) return false;
+                return true;
+            }
+        }
+        static bool Same(double a, double b) => a.Equals(b);
+        public void SetThresholds(double expert, double master)
+        {
+            for (int r = 0; r < 3; r++) { Thresholds[r, 0] = expert; Thresholds[r, 1] = master; }
+        }
+        public void SetThresholds(BranchRoute from, double expert, double master)
+        {
+            Thresholds[(int)from, 0] = expert; Thresholds[(int)from, 1] = master;
+        }
         // An upper-case condition (P, R, JP…) counts only big notes, big drumrolls or kusudama.
         public bool BigOnly;
-        // A fourth argument `l`: the master threshold is an upper bound (value < master → 達人).
+        // A fourth argument `l`: the thresholds are upper bounds (value < master → 達人, else
+        // value < expert → 玄人). OpenTaiko only; fumen always compares with ≥.
         public bool Less;
-        // Routes with #LEVELHOLD: choosing one keeps it for every later branch (OpenTaiko).
+        // Routes with #LEVELHOLD: choosing one keeps it for every later branch (OpenTaiko). This
+        // remembers that the player went through that route, which the thresholds cannot: they
+        // only see the route being played now. fumen has no such hold.
         public readonly bool[] HoldRoutes = new bool[3];
+
+        // The route the condition picks for `value` when `from` is being played. 達人 is tried
+        // first, then 玄人 (OpenTaiko tBranchJudge); a negative threshold is reachable with no
+        // notes played (`p,-1,101` always picks 玄人). Does not apply Routes, #LEVELHOLD or an
+        // empty condition: the player decides those (they keep the current route).
+        public BranchRoute Choose(double value, BranchRoute from)
+        {
+            double expert = ExpertThreshold(from), master = MasterThreshold(from);
+            if (Less) return value < master ? BranchRoute.Master : value < expert ? BranchRoute.Expert : BranchRoute.Normal;
+            return value >= master ? BranchRoute.Master : value >= expert ? BranchRoute.Expert : BranchRoute.Normal;
+        }
         public readonly ChartNote[] FirstEntries = new ChartNote[3];
         // The route drawn for each requested one. An omitted #E uses #N and an omitted #M uses
         // #E, matching Fanmade's image renderer; a complete branch maps every route to itself.

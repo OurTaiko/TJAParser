@@ -141,7 +141,7 @@ static class Dump
         foreach (var n in c.Bars) Note(sb, "b", n);
         foreach (var b in c.Branches)
             sb.Append("br ").Append(b.Id).Append(' ').Append(N(b.Time)).Append(' ').Append(N(b.EndTime)).Append(' ').Append(N(b.DecisionTime))
-                .Append(' ').Append(b.Condition).Append(' ').Append(N(b.ExpertThreshold)).Append(' ').Append(N(b.MasterThreshold))
+                .Append(' ').Append(b.Condition).Append(' ').Append(N(b.ExpertThreshold(BranchRoute.Normal))).Append(' ').Append(N(b.MasterThreshold(BranchRoute.Normal)))
                 .Append(' ').Append(b.BigOnly).Append(' ').Append(b.Less).Append(' ').Append(string.Join(",", b.HoldRoutes))
                 .Append(' ').Append(string.Join(",", b.Routes)).Append(' ')
                 .Append(string.Join(",", b.FirstEntries.Select(e => e == null ? "-" : index[e]))).Append('\n');
