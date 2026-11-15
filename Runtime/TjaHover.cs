@@ -73,7 +73,7 @@ namespace OurTaiko
             sb.Append("  \n");
             if (info.Measure != null)
                 sb.Append(TjaText.Format(language, "Measure {0}, slot {1} of {2} (beat {3})", "第 {0} 小节，{2} 格中的第 {1} 格（第 {3} 拍）", "{0} 小節目、{2} 個中 {1} 個目（{3} 拍）",
-                    info.Measure.Index + 1, info.Slot + 1, info.Measure.Slots, Number(note.Beat))).Append("  \n");
+                    info.Measure.PlayedIndex + 1, info.Slot + 1, info.Measure.Slots, Number(note.Beat))).Append("  \n");
             sb.Append(TjaText.Pick(language, "Speed ", "速度 ", "速さ ")).Append(Number(note.Bpm)).Append(" BPM × ").Append(Number(note.ScrollX));
             if (note.ScrollY != 0) sb.Append(" ").Append(note.ScrollY > 0 ? "+ " : "− ").Append(Number(Math.Abs(note.ScrollY))).Append("i");
             if (note.ScrollMode != ScrollMode.Normal) sb.Append(" (").Append(note.ScrollMode).Append(")");

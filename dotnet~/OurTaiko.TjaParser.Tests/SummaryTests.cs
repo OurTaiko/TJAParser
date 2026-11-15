@@ -63,6 +63,26 @@ public class SummaryTests
         Assert.Equal(new[] { "#2 2.000s ♩240" }, TjaSummary.Hints(document, new TextSpan(Text.IndexOf("3040"), 4)).Select(h => h.Label));
     }
 
+    // The routes of a branch are the same measures of the song: each counts on from the branch's
+    // start, and the measures after it count on from there.
+    [Fact]
+    public void HintsNumberTheRoutesOfABranchAlike()
+    {
+        const string text = "BPM:120\nCOURSE:Oni\nLEVEL:9\n#START\n1,\n#BRANCHSTART p,50,80\n#N\n1,\n2,\n#E\n1,\n2,\n#M\n1,\n2,\n#BRANCHEND\n1,\n"
+            + "#BRANCHSTART p,50,80\n#N\n1,\n#M\n2,\n#BRANCHEND\n3,\n#END\n";
+        var document = new TjaDocument(text);
+        var hints = TjaSummary.Hints(document, new TextSpan(0, text.Length));
+        Assert.Equal(new[] { 1, 2, 3, 2, 3, 2, 3, 4, 5, 5, 6 }, hints.Select(h => int.Parse(h.Label.Split(' ')[0].TrimStart('#'))));
+        var analysis = document.Analyze("Oni");
+        Assert.Equal(Enumerable.Range(0, 11), analysis.Measures.Select(m => m.Index));
+        foreach (var m in analysis.Measures) Assert.Equal(m.StartTime, m.PlayedIndex * 2.0, 9);
+        Assert.Equal(1, analysis.StateAt(text.IndexOf("#M\n1,") + 3).PlayedMeasure);
+        Assert.Equal(5, analysis.StateAt(text.IndexOf("#M\n1,") + 3).Measure);
+        // After an edit the measures are carried over, with their numbers.
+        var next = document.WithChange(text.Length - 1, 0, " ", 1);
+        Assert.Equal(analysis.Measures.Select(m => m.PlayedIndex), next.Analyze("Oni").Measures.Select(m => m.PlayedIndex));
+    }
+
     [Fact]
     public async Task TheServerAnswersInlayHintsAndCodeLens()
     {

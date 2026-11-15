@@ -77,7 +77,7 @@ namespace OurTaiko
                     bool changed = m.Bpm != bpm;
                     bpm = m.Bpm;
                     if (m.Span.Start < within.Start || m.Span.Start > within.End) continue;
-                    string label = "#" + (m.Index + 1).ToString(CultureInfo.InvariantCulture) + " " + m.StartTime.ToString("0.000", CultureInfo.InvariantCulture) + "s";
+                    string label = "#" + (m.PlayedIndex + 1).ToString(CultureInfo.InvariantCulture) + " " + m.StartTime.ToString("0.000", CultureInfo.InvariantCulture) + "s";
                     if (changed) label += " ♩" + m.Bpm.ToString("0.###", CultureInfo.InvariantCulture);
                     hints.Add(new TjaInlayHint(m.Span.Start, label));
                 }

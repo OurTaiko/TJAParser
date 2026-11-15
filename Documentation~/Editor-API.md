@@ -59,11 +59,11 @@ if (block != null)
   - `TryGetSpan(obj, out span)`：音符、小节线（得到整个小节）、`ChartTempo`、`ChartGogo`、`ChartSection`、`ChartJudgeMove`、`ChartLaneAlpha`、`ChartBranch` 在源码中的位置；
   - `TryGetTailSpan(note, out span)`：连打尾的位置；
   - `NoteAt(offset, out tail)`：某位置上的音符。
-- `Measures`：小节表（`ChartMeasure`：`Index`、`Span`、`StartTime`、`EndTime`、`Bpm`、`Length`、`Slots`、`BranchId`、`Route`、`Bar`）。`Played(route)` 给出某条路线实际经过的小节。
+- `Measures`：小节表（`ChartMeasure`：`Index`（书写顺序，各路线连着数，警告用它）、`PlayedIndex`（游玩时的小节号：分歧的每条路线都从分歧起点接着数）、`Span`、`StartTime`、`EndTime`、`Bpm`、`Length`、`Slots`、`BranchId`、`Route`、`Bar`）。`Played(route)` 给出某条路线实际经过的小节。
 - `StateAt(offset, cancel)`：该处生效的状态（`TjaPositionState`）：
   - `Time`、`Beat`、`Bpm`、`MeasureLength`、`ScrollX`／`ScrollY`／`ScrollMode`；
   - `Barline`、`Gogo`、`SuddenShow`／`SuddenMove`；
-  - `Measure`、`Slot`／`Slots`、`BranchId`、`Route`、`OpenRoll`；
+  - `Measure`、`PlayedMeasure`、`Slot`／`Slots`、`BranchId`、`Route`、`OpenRoll`；
   - 下一个气球：`BalloonList`、`BalloonIndex`、`NextBalloonHits`、`BalloonListed`。
   
   每次调用约等于重读一次该块。

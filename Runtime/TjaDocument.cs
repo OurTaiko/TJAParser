@@ -274,7 +274,7 @@ namespace OurTaiko
             foreach (var m in old.Measures)
                 analysis.measures.Add(new ChartMeasure
                 {
-                    Index = m.Index, Span = Span(m.Span), StartTime = m.StartTime, EndTime = m.EndTime, Bpm = m.Bpm, Length = m.Length,
+                    Index = m.Index, PlayedIndex = m.PlayedIndex, Span = Span(m.Span), StartTime = m.StartTime, EndTime = m.EndTime, Bpm = m.Bpm, Length = m.Length,
                     Slots = m.Slots, BranchId = m.BranchId, Route = m.Route, Bar = m.Bar,
                 });
             analysis.Chart = old.Chart.WithWarnings(warnings);

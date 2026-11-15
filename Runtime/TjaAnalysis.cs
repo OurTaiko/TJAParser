@@ -104,6 +104,9 @@ namespace OurTaiko
     public sealed class ChartMeasure
     {
         public int Index { get; internal set; }
+        // Its number as a player meets it: the routes of a branch each count on from the branch's
+        // start, and the measures after it from the last route written (as their times do).
+        public int PlayedIndex { get; internal set; }
         public TextSpan Span { get; internal set; }
         public double StartTime { get; internal set; }
         public double EndTime { get; internal set; }
@@ -134,6 +137,8 @@ namespace OurTaiko
         // The measure being written (its Index), the note slot in it, and how many it has (0 and 0
         // between measures, as before a branch command).
         public int Measure { get; internal set; }
+        // Its number as played (ChartMeasure.PlayedIndex).
+        public int PlayedMeasure { get; internal set; }
         public int Slot { get; internal set; }
         public int Slots { get; internal set; }
         // The branch being written (-1 outside one), and its route (null before the first #N/#E/#M,

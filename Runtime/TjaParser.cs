@@ -334,11 +334,16 @@ namespace OurTaiko
             readonly ChartNote[] openRoll = new ChartNote[3];
             readonly HashSet<ChartNote> closedRolls = new HashSet<ChartNote>();
             int measure;
+            // The measure's number as played: the routes of a branch each count on from its start.
+            int played, branchPlayed;
             readonly List<ChartEntry> common = new List<ChartEntry>();
             List<ChartEntry>[] routeLists;
             // Inside a branch but before its first #N/#E/#M the notes are common (OpenTaiko
             // IsEndedBranching): they go to every route and the routes then start over them.
             bool InRoute => branch != null && hasRoute;
+            // Where a warning says it is: the measure's number as played, from 1, and in a route of a
+            // branch the route before it (`M-12`), as the routes count the same measures.
+            object Where => InRoute ? (object)("NEM"[(int)route] + "-" + (played + 1).ToString(CultureInfo.InvariantCulture)) : played + 1;
             int BranchId => InRoute ? branch.Id : -1;
             List<ChartEntry> Entries => InRoute ? routeLists[(int)route] : common;
             bool warnedCommonInBranch;
@@ -597,7 +602,7 @@ namespace OurTaiko
                     Time = Now, Beat = state.Beat, Bpm = state.Bpm, MeasureLength = state.Measure,
                     ScrollX = state.ScrollX, ScrollY = state.ScrollY, ScrollMode = state.Mode,
                     Barline = state.Barline, Gogo = state.Gogo, SuddenShow = state.SuddenShow, SuddenMove = state.SuddenMove,
-                    Measure = measure, Slot = slot, Slots = slotCount,
+                    Measure = measure, PlayedMeasure = played, Slot = slot, Slots = slotCount,
                     BranchId = branch?.Id ?? -1, Route = InRoute ? route : (BranchRoute?)null,
                     OpenRoll = open?.Kind,
                     BalloonList = BalloonHeaders[list], BalloonIndex = next, NextBalloonHits = next < balloons[list].Count ? balloons[list][next] : 5,
@@ -727,7 +732,7 @@ namespace OurTaiko
                     note.TailBpm = state.Bpm;
                     note.EndScrollClock = state.Clock16 / 16;
                 }
-                else if (note.EndTime != Now) Warn(TjaDiagnosticKind.SharedRollEndsDiffer, measure);
+                else if (note.EndTime != Now) Warn(TjaDiagnosticKind.SharedRollEndsDiffer, Where);
                 for (int r = FirstRoute, last = LastRoute; r <= last; r++)
                     if (openRoll[r] == note) { openRoll[r] = null; rollEndAfterBar[r] = Math.Max(rollEndAfterBar[r] ?? Now, Now); }
                 entries.Add(new ChartEntry(note, true));
@@ -752,7 +757,7 @@ namespace OurTaiko
             {
                 if (branch != null) EndBranch();
                 AddClockPoint();
-                branchStart = state.Copy();
+                branchStart = state.Copy(); branchPlayed = played;
                 branch = new ChartBranch { Id = chart.Branches.Count, Time = Now };
                 ReadCondition(branch, arg);
                 branch.DecisionTime = JudgeTime(branch.Condition == BranchCondition.Drumroll || branch.Condition == BranchCondition.BalloonHits);
@@ -830,7 +835,7 @@ namespace OurTaiko
                 if (branch == null) { Error(TjaDiagnosticKind.RouteWithoutBranch); return; }
                 if (routesSeen[(int)selected]) { Error(TjaDiagnosticKind.DuplicateRoute, selected); return; }
                 routesSeen[(int)selected] = true;
-                state = branchStart.Copy(); route = selected; hasRoute = true; branchBar = true;
+                state = branchStart.Copy(); played = branchPlayed; route = selected; hasRoute = true; branchBar = true;
             }
 
             ChartNote NewNote() => new ChartNote { Time = Now, EndTime = Now, RawMs = state.RawMs,
@@ -863,7 +868,7 @@ namespace OurTaiko
                 if (branch != null && !hasRoute && !warnedCommonInBranch)
                 {
                     // OpenTaiko: these measures are common, and each route then starts over them.
-                    Warn(TjaDiagnosticKind.CommonNotesInBranch, measure);
+                    Warn(TjaDiagnosticKind.CommonNotesInBranch, Where);
                     warnedCommonInBranch = true;
                 }
                 var bar = NewNote(); bar.Display = state.Barline; bar.IsBranchStart = branchBar;
@@ -1103,18 +1108,18 @@ namespace OurTaiko
                     {
                         int open = OpenRolls();
                         for (int k = 0; k < open; k++) CloseRoll(openHeads[k], Entries);
-                        if (open == 0) Warn(TjaDiagnosticKind.StrayRollEnd, measure);
+                        if (open == 0) Warn(TjaDiagnosticKind.StrayRollEnd, Where);
                     }
                     else if (type != 0)
                     {
                         bool blank = false;
                         for (int k = 0, open = OpenRolls(); k < open; k++)
                         {
-                            if (type >= 5 && type <= 9) { Warn(TjaDiagnosticKind.RollHeadInRoll, measure); blank = true; }
-                            else { Warn(TjaDiagnosticKind.RollEndedByNote, type, measure); CloseRoll(openHeads[k], Entries); }
+                            if (type >= 5 && type <= 9) { Warn(TjaDiagnosticKind.RollHeadInRoll, Where); blank = true; }
+                            else { Warn(TjaDiagnosticKind.RollEndedByNote, type, Where); CloseRoll(openHeads[k], Entries); }
                         }
                         // OpenTaiko's unknown symbol: it ends an open roll as a note would, then is a blank.
-                        if (type == Unused) { Warn(TjaDiagnosticKind.UnusedNoteE, measure); blank = true; }
+                        if (type == Unused) { Warn(TjaDiagnosticKind.UnusedNoteE, Where); blank = true; }
                         if (blank) goto advance;
                         var note = NewNote(); note.Kind = (NoteKind)type;
                         if (note.IsBalloon)
@@ -1126,7 +1131,7 @@ namespace OurTaiko
                             else { note.BalloonHits = NextBalloon(0); NextBalloon(1); NextBalloon(2); }
                             // An inline count still takes its place in the lists.
                             if (inlineHits.HasValue) note.BalloonHits = inlineHits.Value;
-                            else if (!listed) Warn(TjaDiagnosticKind.BalloonWithoutCount, BalloonHeaders[list], measure);
+                            else if (!listed) Warn(TjaDiagnosticKind.BalloonWithoutCount, BalloonHeaders[list], Where);
                         }
                         chart.Notes.Add(note);
                         map?.AddNote(note, span);
@@ -1154,10 +1159,10 @@ namespace OurTaiko
                 map?.Add(bar, measureSpan);
                 measures?.Add(new ChartMeasure
                 {
-                    Index = measure, Span = measureSpan, StartTime = bar.Time, EndTime = Now, Bpm = bar.Bpm, Length = barLength,
+                    Index = measure, PlayedIndex = played, Span = measureSpan, StartTime = bar.Time, EndTime = Now, Bpm = bar.Bpm, Length = barLength,
                     Slots = slots, BranchId = bar.BranchId, Route = bar.Route, Bar = bar,
                 });
-                measure++;
+                measure++; played++;
                 pending.Clear();
                 pendingNotes = 0;
                 slot = slotCount = 0;

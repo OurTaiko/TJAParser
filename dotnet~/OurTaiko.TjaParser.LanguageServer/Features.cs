@@ -81,7 +81,7 @@ public sealed partial class Server
                     && document.Analyze(block.Course, block.Side, cancel).StateAt(offset, cancel) is TjaPositionState state)
                     result = new JsonObject
                     {
-                        ["course"] = block.Course, ["side"] = block.Side, ["time"] = state.Time, ["measure"] = state.Measure,
+                        ["course"] = block.Course, ["side"] = block.Side, ["time"] = state.Time, ["measure"] = state.PlayedMeasure,
                         ["branch"] = state.BranchId, ["route"] = state.Route?.ToString(),
                     };
                 break;
