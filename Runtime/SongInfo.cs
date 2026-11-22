@@ -44,6 +44,9 @@ namespace OurTaiko
         // BGMOVIE and MOVIEOFFSET headers, as written / in seconds.
         public string Movie = "";
         public double MovieOffset;
+        // SCENEPRESET header, as written: the name of the play backdrop the chart asks for (a collab's
+        // set, say). What names there are is the game's business; one it does not know plays the usual backdrop.
+        public string ScenePreset = "";
         // NOTESDESIGNER0–4 by course name (Easy…Edit).
         public readonly Dictionary<string, string> NotesDesigners = new Dictionary<string, string>();
         // Every #START block in file order.
@@ -129,6 +132,7 @@ namespace OurTaiko
                     case "WAVE": info.Wave = value; break;
                     case "BGMOVIE": info.Movie = value; break;
                     case "MOVIEOFFSET": info.MovieOffset = Number(value, 0); break;
+                    case "SCENEPRESET": info.ScenePreset = value.Trim(); break;
                     case "BPM": info.Bpm = Number(value, info.Bpm); break;
                     case "OFFSET": info.Offset = Number(value, 0); break;
                     case "DEMOSTART": info.DemoStart = Number(value, 0); break;

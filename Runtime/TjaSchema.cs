@@ -164,6 +164,7 @@ namespace OurTaiko
                 new TjaKeyword("WAVE", Header, TjaOrigin.Tja, false, TjaOnError.None, "2.2", "The audio file.", P("file", TjaValueType.Text)),
                 new TjaKeyword("BGMOVIE", Header, TjaOrigin.Tja, false, TjaOnError.None, "2.2", "The background movie file.", P("file", TjaValueType.Text)),
                 new TjaKeyword("MOVIEOFFSET", Header, TjaOrigin.Tja, false, TjaOnError.Default, "2.2", "Seconds the movie starts after the audio.", P("seconds", TjaValueType.Number, "s")),
+                new TjaKeyword("SCENEPRESET", Header, TjaOrigin.OpenTaiko, false, TjaOnError.None, "2.2", "The play backdrop the chart asks for, by name; a game that has none by that name plays its usual one.", P("name", TjaValueType.Text)),
                 new TjaKeyword("DEMOSTART", Header, TjaOrigin.Tja, false, TjaOnError.Default, "2.2", "Where song select's preview starts.", P("seconds", TjaValueType.Number, "s")),
                 new TjaKeyword("MAKER", Header, TjaOrigin.OpenTaiko, false, TjaOnError.None, "2.2", "The chart's author.", P("name", TjaValueType.Text)),
             };

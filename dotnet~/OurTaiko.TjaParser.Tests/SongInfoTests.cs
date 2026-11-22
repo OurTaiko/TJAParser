@@ -97,6 +97,9 @@ public class SongInfoTests
         Assert.Equal("a.ogg", info.Wave);
         Assert.Equal("a.mp4", info.Movie);
         Assert.Equal(0.25, info.MovieOffset);
+        // A chart that names no backdrop has none.
+        Assert.Equal("", info.ScenePreset);
+        Assert.Equal("MIKU", SongInfo.Read("SCENEPRESET: MIKU \n" + Text).ScenePreset);
         Assert.Equal("Maker", info.Maker);
     }
 

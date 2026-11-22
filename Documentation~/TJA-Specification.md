@@ -106,6 +106,7 @@ CRLF、单独的 CR、LF 都算一个换行（与 OpenTaiko 相同）。行号�
 | `BALLOON` `BALLOONNOR` `BALLOONEXP` `BALLOONMAS` | Parse | 气球打数列表，见 7.1 |
 | `STYLE` | SongInfo | 原文存入 `TjaBlock.Style`；解析器不按它选块 |
 | `GENRE` `WAVE` `BGMOVIE` | SongInfo | 原文 |
+| `SCENEPRESET` | SongInfo | 原文（去掉首尾空白）：谱面指定的演奏背景的名字。有哪些名字由游戏决定，不认识的名字按没写处理。不进规范文本，不影响哈希 |
 | `MAKER` | SongInfo | trim 后存入；块的 `Maker` 在没有对应 `NOTESDESIGNERn` 时用它 |
 | `NOTESDESIGNER0`–`NOTESDESIGNER4` | SongInfo | 分别是 Easy、Normal、Hard、Oni、Edit 的谱面作者 |
 | `DEMOSTART` `MOVIEOFFSET` | SongInfo | 秒；读不出当 0 |
