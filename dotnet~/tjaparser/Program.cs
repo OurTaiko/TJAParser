@@ -59,7 +59,7 @@ static int Run(string[] args)
                 Titles = info.Titles, Subtitles = info.Subtitles, Genre = info.Genre, Maker = info.Maker,
                 NotesDesigners = info.NotesDesigners,
                 Bpm = info.Bpm, Offset = info.Offset, DemoStart = info.DemoStart,
-                Wave = info.Wave, Movie = info.Movie, MovieOffset = info.MovieOffset,
+                Wave = info.Wave, Movie = info.Movie, MovieOffset = info.MovieOffset, ScenePreset = info.ScenePreset,
                 Blocks = info.Blocks.Select(b =>
                 {
                     var entry = new InspectedBlock
@@ -191,6 +191,7 @@ sealed class Inspection
     [JsonPropertyName("wave")] public string Wave { get; set; }
     [JsonPropertyName("movie")] public string Movie { get; set; }
     [JsonPropertyName("movieOffset")] public double MovieOffset { get; set; }
+    [JsonPropertyName("scenePreset")] public string ScenePreset { get; set; }
     [JsonPropertyName("blocks")] public List<InspectedBlock> Blocks { get; set; }
 }
 

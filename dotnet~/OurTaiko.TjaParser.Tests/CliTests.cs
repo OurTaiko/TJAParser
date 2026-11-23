@@ -44,6 +44,18 @@ public class CliTests
         Assert.Contains("Unsupported COURSE 'Tower'", error);
     }
 
+    // The servers read a chart's headers from inspect, the play backdrop it asks for among them.
+    [Fact]
+    public void InspectSaysTheScenePreset()
+    {
+        var (code, output, _) = Run("SCENEPRESET: MIKU \n" + Tja.Sample, "inspect");
+        Assert.Equal(0, code);
+        Assert.Contains("\"scenePreset\":\"MIKU\"", output);
+        (code, output, _) = Run(Tja.Sample, "inspect");
+        Assert.Equal(0, code);
+        Assert.Contains("\"scenePreset\":\"\"", output);
+    }
+
     [Fact]
     public void HashListsTheBlocks()
     {
