@@ -152,3 +152,26 @@ cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # �
 等价示例（测试 `HashTests`）：`BPM:120` ≡ `BPM:150` + 块首 `#BPMCHANGE 120` ≡ `BPM:240` + `#MEASURE 8/4` + `#SCROLL 0.5` ≡ `BPM:60` + `#MEASURE 2/4` + `#SCROLL 2`；小节中间无效的 `#BPMCHANGE` 也不影响。不等价：OFFSET 变、速度变（只改 SCROLL 或只改 BPM）、BM 滚动下改 MEASURE（节拍时钟间距变）。
 
 **版本规则**：`Runtime/` 里任何会改变 `TaikoChart` 内容或规范文本的改动，都要把 `ChartCanonical.Version` 加一，重新钉住 `KnownVectorTests` 的向量，并让两站对全部谱面重算；只改标题处理、警告文字或性能的改动不升版本。`package.json` 的版本与 git tag 随每次发布更新。
+
+## Exact drumroll scoring duration (0.17.0)
+
+`ChartNote.ScoreDuration` is a `TjaFraction` in **microseconds** for notes 5/6.
+It is calculated during the normal parser traversal, independently of playback
+`Time` / `EndTime`. Each beat uses `floor(60000000 / BPM + 1/2)` microseconds;
+source-decimal BPM, measure lengths and delays retain their exact fractions.
+An explicit `8` off the measure's sixteenth-note grid adds the smaller of its
+slot length and 1/12 beat at the ending BPM. Implicit note / `#END` closures
+use their existing closure position without that padding. Signed delays remain
+signed; consumers choose their policy for a negative-duration roll.
+
+Durations are stored per note, including player blocks and branch routes. Shared
+heads retain the first route's closure, matching their existing playback tail.
+Consumers select their routes, sum durations, then round their scoring budget.
+Manually constructed notes must set `ScoreDuration` themselves. The default
+fraction is zero; this field is deliberately excluded from `ChartCanonical`,
+and canonical version 2 and existing content hashes remain unchanged.
+
+Exact timing accepts decimal comma and exponent spellings. Nonzero values whose
+decimal scale exceeds ±10000 produce the normal number diagnostic (and a
+`FormatException` from strict parsing), bounding exponent-driven allocations.
+No binary-float or decimal rounding, epsilon, or second source scan is used.
