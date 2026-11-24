@@ -71,7 +71,16 @@ static int Run(string[] args)
                     if (hashes.TryGetValue((b.Difficulty, b.Side), out var h))
                     {
                         entry.Hash = h.Hash; entry.Error = h.Error; entry.Warnings = h.Warnings.Count > 0 ? h.Warnings : null;
-                        if (h.Chart != null) entry.Notes = RouteNotes(h.Chart);
+                        if (h.Chart != null)
+                        {
+                            entry.Notes = RouteNotes(h.Chart);
+                            var scoring = ShinuchiScoring.Of(h.Chart);
+                            entry.Scoring = new Scoring
+                            {
+                                GoodPoints = scoring.GoodPoints, OkPoints = scoring.OkPoints,
+                                LongHitPoints = ShinuchiScoring.LongHitPoints, KiwamiThreshold = scoring.KiwamiThreshold,
+                            };
+                        }
                     }
                     return entry;
                 }).ToList(),
@@ -211,6 +220,17 @@ sealed class InspectedBlock
     [JsonPropertyName("error")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Error { get; set; }
     [JsonPropertyName("warnings")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> Warnings { get; set; }
     [JsonPropertyName("notes")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, NoteList> Notes { get; set; }
+    [JsonPropertyName("scoring")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Scoring Scoring { get; set; }
+}
+
+// ShinuchiScoring: what each judgment and long-note hit is worth on this block, and its kiwami line.
+// A play's score is (良 + Ad-Lib 良) × goodPoints + (可 + Ad-Lib 可) × okPoints + long hits × longHitPoints.
+sealed class Scoring
+{
+    [JsonPropertyName("goodPoints")] public int GoodPoints { get; set; }
+    [JsonPropertyName("okPoints")] public int OkPoints { get; set; }
+    [JsonPropertyName("longHitPoints")] public int LongHitPoints { get; set; }
+    [JsonPropertyName("kiwamiThreshold")] public int KiwamiThreshold { get; set; }
 }
 
 sealed class NoteList
