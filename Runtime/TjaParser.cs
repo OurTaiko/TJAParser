@@ -352,7 +352,12 @@ namespace OurTaiko
             readonly List<int> pending = new List<int>();
             int pendingNotes;
             TimingState state, branchStart;
+            // Where each drumroll still unscored began on the scoring clock.
             readonly Dictionary<ChartNote, TjaFraction> scoreStarts = new Dictionary<ChartNote, TjaFraction>();
+            // A roll from before the branch, ended on its routes: its scoring duration on each route.
+            // It scores as the Master route (or the route drawn in its place) ends it, which is known
+            // once the branch ends (EndBranch), whatever route is written first.
+            readonly Dictionary<ChartNote, TjaFraction?[]> routeScores = new Dictionary<ChartNote, TjaFraction?[]>();
             ChartBranch branch;
             readonly bool[] routesSeen = new bool[3];
             BranchRoute route;
@@ -769,15 +774,25 @@ namespace OurTaiko
             // Ends a roll here on the routes being written. A head shared by several routes keeps
             // the end the first route gave it (one ChartNote has one EndTime); a later route that
             // ends it elsewhere is warned about, and still gets the tail entry in its own list.
+            // Its scoring duration is the Master route's instead (see routeScores).
             void CloseRoll(ChartNote note, List<ChartEntry> entries, TjaFraction tailPadding = default)
             {
-                if (closedRolls.Add(note))
+                if (scoreStarts.TryGetValue(note, out var scoreStart))
                 {
-                    if (note.IsDrumroll)
+                    var duration = state.ScoreTime - scoreStart + tailPadding;
+                    if (InRoute && note.BranchId != BranchId)
                     {
-                        note.ScoreDuration = state.ScoreTime - scoreStarts[note] + tailPadding;
+                        if (!routeScores.TryGetValue(note, out var byRoute)) routeScores.Add(note, byRoute = new TjaFraction?[3]);
+                        byRoute[(int)route] = duration;
+                    }
+                    else
+                    {
+                        note.ScoreDuration = duration;
                         scoreStarts.Remove(note);
                     }
+                }
+                if (closedRolls.Add(note))
+                {
                     note.EndTime = Now;
                     note.TailBpm = state.Bpm;
                     note.EndScrollClock = state.Clock16 / 16;
@@ -797,6 +812,15 @@ namespace OurTaiko
                 if (!routesSeen[1]) branch.Routes[1] = BranchRoute.Normal;
                 if (!routesSeen[2]) branch.Routes[2] = branch.Routes[1];
                 branch.EndTime = Now;
+                // Rolls from before the branch score as the Master route ended them. One that route
+                // left open is scored where it ends after the branch.
+                if (routeScores.Count > 0)
+                {
+                    int master = (int)branch.ResolveRoute(BranchRoute.Master);
+                    foreach (var pair in routeScores)
+                        if (pair.Value[master] is TjaFraction duration) { pair.Key.ScoreDuration = duration; scoreStarts.Remove(pair.Key); }
+                    routeScores.Clear();
+                }
                 // As in OurTaikoPlayer, common notes continue from the final authored route.
                 branch = null; hasRoute = false; branchBar = false;
                 // OpenTaiko GotoBranchEnd: every route's beat clock continues from here.
@@ -997,8 +1021,8 @@ namespace OurTaiko
             {
                 if (!ReadNumber(arg, out double bpm)) return;
                 if (!(bpm > 0) || double.IsInfinity(bpm)) { Error(TjaDiagnosticKind.InvalidBpmChange); return; }
-                if (!ReadFraction(arg, out var exact)) return;
-                state.ScoreBpm(exact);
+                // An exact value out of range is an error for scoring only; play keeps the tempo.
+                if (ReadFraction(arg, out var exact)) state.ScoreBpm(exact);
                 state.Bpm = bpm;
                 var tempo = new ChartTempo { Time = Now, ResumeTime = Now, Beat = state.Beat, Bpm = state.Bpm, BranchId = BranchId, Route = route };
                 chart.Tempos.Add(tempo);
@@ -1021,8 +1045,8 @@ namespace OurTaiko
                 if (!ReadNumber(parts[0], out double beats) || !ReadNumber(parts[1], out double unit)) return;
                 double length = (float)beats / (float)unit;
                 if (!(length > 0) || double.IsInfinity(length)) { Error(TjaDiagnosticKind.InvalidMeasure); return; }
-                if (!ReadFraction(parts[0], out var exactBeats) || !ReadFraction(parts[1], out var exactUnit)) return;
-                state.ScoreMeasure = exactBeats / exactUnit;
+                if (ReadFraction(parts[0], out var exactBeats) && ReadFraction(parts[1], out var exactUnit))
+                    state.ScoreMeasure = exactBeats / exactUnit;
                 state.Measure = length;
             }
 
@@ -1037,8 +1061,7 @@ namespace OurTaiko
             bool Delay(string arg)
             {
                 if (!TjaNumber.TryParse(arg, out double delay) || double.IsNaN(delay) || double.IsInfinity(delay)) return false;
-                if (!ReadFraction(arg, out var exact)) return true;
-                state.ScoreTime += exact * 1000000;
+                if (ReadFraction(arg, out var exact)) state.ScoreTime += exact * 1000000;
                 double start = Now;
                 // The beat clock keeps running through a delay (OpenTaiko dbNowBMScollTime).
                 state.Move(delay * 1000, 0, delay * 1000 * state.Bpm / 15000);

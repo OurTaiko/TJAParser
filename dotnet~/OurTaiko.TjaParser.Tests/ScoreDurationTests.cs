@@ -83,12 +83,31 @@ public class ScoreDurationTests
         Assert.Equal(new TjaFraction[] { 1500000, 750000, 1500000, 1125000, 1125000 }, chart.Notes.Select(n => n.ScoreDuration));
     }
 
-    [Fact]
-    public void SharedRollKeepsTheFirstRoutesTailLikePlayback()
+    // A roll from before a branch scores as the Master route ends it; play keeps the first route's end.
+    [Theory]
+    [InlineData("#N\n0080,\n#E\n8000,\n#M\n0008,", 3500000, 3)]
+    [InlineData("#M\n0008,\n#N\n0080,\n#E\n8000,", 3500000, 3.5)]
+    [InlineData("#N\n0080,\n#E\n8000,", 2000000, 3)]
+    [InlineData("#N\n0080,", 3000000, 3)]
+    [InlineData("#N\n0080,\n#M\n0000,\n#BRANCHEND\n8000,", 4000000, 3)]
+    public void SharedRollScoresAsTheMasterRouteEndsIt(string routes, int micros, double endTime)
     {
-        var chart = Parse("5000,\n#BRANCHSTART p,50,80\n#N\n0080,\n#E\n8000,\n#M\n0008,\n#BRANCHEND");
-        Assert.Equal((TjaFraction)3000000, Duration(chart));
-        Assert.Equal(3, chart.Notes.Single().EndTime);
+        var chart = Parse("5000,\n#BRANCHSTART p,50,80\n" + routes);
+        Assert.Equal((TjaFraction)micros, Duration(chart));
+        Assert.Equal(endTime, chart.Notes.Single().EndTime);
+    }
+
+    [Fact]
+    public void ExactNumbersOutOfRangeLeavePlayAsItWas()
+    {
+        // Each value reads as a double, but its decimal scale is past the exact reader's bound.
+        string tail = new string('0', 10000) + "1";
+        string Body(string delay, string bpm, string beats)
+            => $"BPM:120\nCOURSE:Oni\n#START\n5\n#DELAY {delay}\n#BPMCHANGE {bpm}\n800,\n#MEASURE {beats}/4\n1,\n1,\n#END";
+        var analysis = TjaParser.Analyze(Body("0.5" + tail, "240." + tail, "2." + tail));
+        Assert.Equal(3, analysis.Diagnostics.Count(d => d.Kind == TjaDiagnosticKind.NumberUnreadable));
+        var plain = TjaParser.Parse(Body("0.5", "240", "2"));
+        Assert.Equal(plain.Notes.Select(n => (n.Time, n.EndTime)), analysis.Chart.Notes.Select(n => (n.Time, n.EndTime)));
     }
 
     [Fact]

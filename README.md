@@ -153,25 +153,27 @@ cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # �
 
 **版本规则**：`Runtime/` 里任何会改变 `TaikoChart` 内容或规范文本的改动，都要把 `ChartCanonical.Version` 加一，重新钉住 `KnownVectorTests` 的向量，并让两站对全部谱面重算；只改标题处理、警告文字或性能的改动不升版本。`package.json` 的版本与 git tag 随每次发布更新。
 
-## Exact drumroll scoring duration (0.17.0)
+## 真打计分（0.17.0）
 
-`ChartNote.ScoreDuration` is a `TjaFraction` in **microseconds** for notes 5/6.
-It is calculated during the normal parser traversal, independently of playback
-`Time` / `EndTime`. Each beat uses `floor(60000000 / BPM + 1/2)` microseconds;
-source-decimal BPM, measure lengths and delays retain their exact fractions.
-An explicit `8` off the measure's sixteenth-note grid adds the smaller of its
-slot length and 1/12 beat at the ending BPM. Implicit note / `#END` closures
-use their existing closure position without that padding. Signed delays remain
-signed; consumers choose their policy for a negative-duration roll.
+`ShinuchiScoring.Of(chart)` 给出一张谱面的真打分数表：良分 `GoodPoints`（初值）、可分 `OkPoints`、黄条与气球每打 `LongHitPoints`（100），以及极分线 `KiwamiThreshold`。它只由谱面决定（难度、音符、气球打数、黄条时长），游戏、网站、编辑器读到的是同一组数字。调用时从音符算出，不进 `ChartCanonical`，不影响哈希。
 
-Durations are stored per note, including player blocks and branch routes. Shared
-heads retain the first route's closure, matching their existing playback tail.
-Consumers select their routes, sum durations, then round their scoring budget.
-Manually constructed notes must set `ScoreDuration` themselves. The default
-fraction is zero; this field is deliberately excluded from `ChartCanonical`,
-and canonical version 2 and existing content hashes remain unchanged.
+```text
+c = 6 / 7.5 / 10 / 15 / 15（Easy / Normal / Hard / Oni / Edit）
+k = floor(c × T)，H = ceil(9k / 8)，A = 100 × (B + H)
+良 = max(10, 10 × ceil((1000000 − A) / (10 × N)))；没有 N 时为 1000000
+可 = 良的一半，向下取到 10 分
+极分线 = max(1000000, N × 良 + A)；超过 int 上限时取 int.MaxValue
+```
 
-Exact timing accepts decimal comma and exponent spellings. Nonzero values whose
-decimal scale exceeds ±10000 produce the normal number diagnostic (and a
-`FormatException` from strict parsing), bounding exponent-driven allocations.
-No binary-float or decimal rounding, epsilon, or second source scan is used.
+- `N`（`JudgeableNotes`）：1–4 号音符与 Kadon。Ad-Lib、地雷不算。
+- `B`（`BalloonHits`）：气球与 Kusudama 的要求打数之和，不封顶；非正数不计。
+- `T`（`RollMicroseconds`，微秒）：各黄条 `ScoreDuration` 之和，先求和再取整；负时长的黄条不计。
+- 只统计共通部分与每个分歧的达人路线（没有 `#M` 时取顶替它的路线）。`RouteNotes` 另给三条路线各自的 `N`，供魂槽使用。
+
+**黄条计分时长** `ChartNote.ScoreDuration`（`TjaFraction`，微秒，只对 5／6）在正常解析遍历里算出，与播放用的 `Time`／`EndTime` 互不影响：
+
+- 每拍先取整为 `floor(60000000 / BPM + 1/2)` 微秒，再乘以精确拍数；BPM、`#MEASURE`、`#DELAY` 按原文十进制精确读取，不经过浮点。条内的 `#BPMCHANGE` 分段计算，`#DELAY` 按秒计入，负值照原样。
+- 写明的 `8` 不在本小节十六分网格上时，补 `min(该格拍数, 1/12)` 拍，按结尾处的 BPM 换算。被音符或 `#END` 隐式结束的黄条不补。
+- 分歧前开始、在各路线里结束的黄条，按达人路线（或顶替它的路线）的结尾计时；达人路线没结束它时，按它在分歧之后结束的位置计。播放的 `EndTime` 仍取最先写的路线。
+- 手工构造的黄条要自己填 `ScoreDuration`，默认为 0。
+- 小数位（含指数）超过 ±10000 的非零数值无法精确读取，报 `NumberUnreadable`（严格 `Parse` 抛 `FormatException`），以免指数写法耗尽内存；播放照常按浮点值生效。
