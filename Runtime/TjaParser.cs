@@ -432,10 +432,13 @@ namespace OurTaiko
                 }
             }
 
+            // The scoring clock's reading of a number already read as a finite double. Every such
+            // number reads (long decimals are rounded, see TjaFraction.MaxDecimals); one that did not
+            // would be an error of this reader, reported rather than scored wrong.
             bool ReadFraction(string text, out TjaFraction value)
             {
                 if (TjaFraction.TryParse(text, out value)) return true;
-                Error(TjaDiagnosticKind.NumberUnreadable, "Exact timing number is unreadable or its decimal scale exceeds 10000.");
+                Error(TjaDiagnosticKind.NumberUnreadable, "Exact timing number is unreadable.");
                 return false;
             }
 
@@ -1021,7 +1024,6 @@ namespace OurTaiko
             {
                 if (!ReadNumber(arg, out double bpm)) return;
                 if (!(bpm > 0) || double.IsInfinity(bpm)) { Error(TjaDiagnosticKind.InvalidBpmChange); return; }
-                // An exact value out of range is an error for scoring only; play keeps the tempo.
                 if (ReadFraction(arg, out var exact)) state.ScoreBpm(exact);
                 state.Bpm = bpm;
                 var tempo = new ChartTempo { Time = Now, ResumeTime = Now, Beat = state.Beat, Bpm = state.Bpm, BranchId = BranchId, Route = route };
@@ -1188,7 +1190,7 @@ namespace OurTaiko
                     {
                         int open = OpenRolls();
                         TjaFraction padding = 0;
-                        if (!(scorePosition * 4).IsInteger)
+                        if (open > 0 && !(scorePosition * 4).IsInteger)
                         {
                             var step = state.ScoreStep(slots);
                             var maximum = new TjaFraction(1, 12);

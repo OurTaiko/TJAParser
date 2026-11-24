@@ -98,16 +98,48 @@ public class ScoreDurationTests
     }
 
     [Fact]
-    public void ExactNumbersOutOfRangeLeavePlayAsItWas()
+    public void LongDecimalsRoundAndChangeNothingElse()
     {
-        // Each value reads as a double, but its decimal scale is past the exact reader's bound.
+        // Each value reads as a double; past forty places the scoring clock rounds it.
         string tail = new string('0', 10000) + "1";
         string Body(string delay, string bpm, string beats)
             => $"BPM:120\nCOURSE:Oni\n#START\n5\n#DELAY {delay}\n#BPMCHANGE {bpm}\n800,\n#MEASURE {beats}/4\n1,\n1,\n#END";
         var analysis = TjaParser.Analyze(Body("0.5" + tail, "240." + tail, "2." + tail));
-        Assert.Equal(3, analysis.Diagnostics.Count(d => d.Kind == TjaDiagnosticKind.NumberUnreadable));
+        Assert.False(analysis.HasErrors);
         var plain = TjaParser.Parse(Body("0.5", "240", "2"));
-        Assert.Equal(plain.Notes.Select(n => (n.Time, n.EndTime)), analysis.Chart.Notes.Select(n => (n.Time, n.EndTime)));
+        Assert.Equal(plain.Notes.Select(n => (n.Time, n.EndTime, n.ScoreDuration)), analysis.Chart.Notes.Select(n => (n.Time, n.EndTime, n.ScoreDuration)));
+        Assert.Equal(plain.Notes.Select(n => (n.Time, n.EndTime, n.ScoreDuration)), TjaParser.Parse(Body("0.5" + tail, "240." + tail, "2." + tail)).Notes.Select(n => (n.Time, n.EndTime, n.ScoreDuration)));
+    }
+
+    // Forty places, half away from zero. A delay of 10^-40 s is 10^-34 µs.
+    [Theory]
+    [InlineData("0.0{39}5", 5)]
+    [InlineData("0.0{40}5", 1)]
+    [InlineData("-0.0{40}5", -1)]
+    [InlineData("0.0{40}49", 0)]
+    [InlineData("0.0{41}9", 0)]
+    [InlineData("1e-2147483647", 0)]
+    [InlineData("1e-99999999999", 0)]
+    [InlineData("5{39}e-79", 1)]
+    public void ExactNumbersRoundToFortyPlaces(string delay, int tenToMinus34)
+    {
+        delay = System.Text.RegularExpressions.Regex.Replace(delay, @"(\d)\{(\d+)\}", m => new string(m.Groups[1].Value[0], int.Parse(m.Groups[2].Value)));
+        var source = "BPM:120\nCOURSE:Oni\n#START\n5\n#DELAY " + delay + "\n800,\n#END";
+        Assert.False(TjaParser.Analyze(source).HasErrors);
+        var expected = (TjaFraction)500000 + new TjaFraction(tenToMinus34, System.Numerics.BigInteger.Pow(10, 34));
+        Assert.Equal(expected, Duration(TjaParser.Parse(source)));
+    }
+
+    [Fact]
+    public void RoundingKeepsTheScoringClockSmall()
+    {
+        // Before rounding, 20000 slots of a measure with 9991 decimals took 19 s to sum exactly.
+        string measure = "#MEASURE 4." + new string('0', 9990) + "1/4\n";
+        var chart = Parse(measure + "5" + new string('0', 19999) + ",\n8,");
+        Assert.Equal((TjaFraction)2000000, chart.Notes.Single().ScoreDuration);
+        // A digit past forty places no longer counts: this scores as 512 (thirty places still do,
+        // see SourceDecimalsSurviveBeyondDoubleAndDecimalPrecision).
+        Assert.Equal((TjaFraction)117188, Duration(Parse("5800,", "BPM:512." + new string('0', 40) + "1")));
     }
 
     [Fact]
@@ -125,14 +157,6 @@ public class ScoreDurationTests
     [InlineData("+120.0", 500000)]
     public void ExistingNumberSpellingsWork(string bpm, int micros)
         => Assert.Equal((TjaFraction)micros, Duration(Parse("5800,", "BPM:" + bpm)));
-
-    [Fact]
-    public void ExactNumberLimitsUseNormalDiagnostics()
-    {
-        const string source = "BPM:120\n#START\n5\n#DELAY 1e-2147483647\n800,\n#END";
-        Assert.Throws<FormatException>(() => TjaParser.Parse(source));
-        Assert.True(TjaParser.Analyze(source).HasErrors);
-    }
 
     [Fact]
     public void RationalDefaultSignsAndRounding()

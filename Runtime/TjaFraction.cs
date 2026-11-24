@@ -52,26 +52,52 @@ namespace OurTaiko
         public override int GetHashCode() => numerator.GetHashCode() * 397 ^ Denominator.GetHashCode();
         public override string ToString() => numerator.ToString(CultureInfo.InvariantCulture) + "/" + Denominator.ToString(CultureInfo.InvariantCulture);
 
-        // Read the decimal spelling directly, including exponents and TJA decimal commas.
-        // Bound the scale so a tiny exponent such as 1e-2147483647 cannot exhaust memory.
+        // Decimal places kept when reading a number: far past a double's 17 significant digits, and
+        // small enough that the parser's per-slot sums stay cheap whatever the source writes.
+        internal const int MaxDecimals = 40;
+        // A power of ten past a double's range (about 1e308); a number the parser accepts as a
+        // finite double never gets there.
+        const int MaxMagnitude = 400;
+
+        // Read the decimal spelling directly, including exponents and TJA decimal commas, rounded
+        // half away from zero to MaxDecimals places. False only for a spelling that is not a decimal
+        // number, or one past a double's range.
         internal static bool TryParse(string text, out TjaFraction value)
         {
             value = default;
             text = TjaNumber.Normalize(text);
-            int exponent = 0, e = text.IndexOfAny(new[] { 'e', 'E' });
+            BigInteger exponent = 0;
+            int e = text.IndexOfAny(new[] { 'e', 'E' });
             if (e >= 0)
             {
-                if (!int.TryParse(text.Substring(e + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent)) return false;
+                if (!BigInteger.TryParse(text.Substring(e + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent)) return false;
                 text = text.Substring(0, e);
             }
             int dot = text.IndexOf('.');
-            long scale = (dot < 0 ? 0 : text.Length - dot - 1L) - exponent;
+            var scale = (dot < 0 ? 0 : text.Length - dot - 1) - exponent;
             if (dot >= 0) text = text.Remove(dot, 1);
             if (!BigInteger.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var digits)) return false;
             if (digits.IsZero) return true;
-            if (scale < -10000 || scale > 10000) return false;
-            value = scale >= 0 ? new TjaFraction(digits, BigInteger.Pow(10, (int)scale))
-                : new TjaFraction(digits * BigInteger.Pow(10, (int)-scale), 1);
+            if (scale < 0)
+            {
+                // digits ≥ 1, so the value is at least 10^-scale.
+                if (-scale > MaxMagnitude) return false;
+                value = new TjaFraction(digits * BigInteger.Pow(10, (int)-scale), 1);
+                return true;
+            }
+            if (scale > MaxDecimals)
+            {
+                // |digits| < 10^text.Length: dropping more places than that leaves less than 0.1 of
+                // the last kept place, which rounds to zero (and keeps the power below small).
+                var drop = scale - MaxDecimals;
+                if (drop > text.Length) return true;
+                var unit = BigInteger.Pow(10, (int)drop);
+                var quotient = BigInteger.DivRem(digits, unit, out var remainder);
+                if (BigInteger.Abs(remainder) * 2 >= unit) quotient += digits.Sign;
+                digits = quotient;
+                scale = MaxDecimals;
+            }
+            value = new TjaFraction(digits, BigInteger.Pow(10, (int)scale));
             return true;
         }
     }
