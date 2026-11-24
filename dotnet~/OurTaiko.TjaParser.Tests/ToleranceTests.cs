@@ -65,14 +65,18 @@ public class ToleranceTests
         Assert.Empty(chart.Warnings);
     }
 
+    // Unlike OpenTaiko, which ends a common roll on each route, this is an error (TJA1017): one
+    // ChartNote has one end. Recovery keeps the first route's end, and every route list still
+    // carries its own tail entry.
     [Fact]
-    public void ACommonRollIsEndedByEachRoute()
+    public void ACommonRollEndedOnTheRoutesIsAnError()
     {
-        var chart = Parse("5000,\n#BRANCHSTART p,50,80\n#N\n8000,\n#E\n8000,\n#M\n0800,\n#BRANCHEND\n1111,\n");
+        var analysis = TjaParser.Analyze("BPM:120\nCOURSE:Oni\n#START\n5000,\n#BRANCHSTART p,50,80\n#N\n8000,\n#E\n8000,\n#M\n0800,\n#BRANCHEND\n1111,\n#END\n");
+        Assert.Equal(3, analysis.Diagnostics.Count(d => d.Kind == TjaDiagnosticKind.RollEndsInRoute));
+        var chart = analysis.Chart;
         var roll = Assert.Single(chart.Notes, n => n.Kind == NoteKind.Roll);
         Assert.Equal(2, roll.EndTime);
-        Assert.Contains(chart.Warnings, w => w.StartsWith("A roll shared by the routes ends at different times"));
-        // Every route list carries its own tail entry.
+        Assert.Equal((TjaFraction)2000000, roll.ScoreDuration);
         for (int list = 1; list <= 3; list++) Assert.Contains(chart.NoteLists[list], e => e.Note == roll && e.IsTail);
     }
 

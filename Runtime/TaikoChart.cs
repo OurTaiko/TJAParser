@@ -25,6 +25,10 @@ namespace OurTaiko
         // slot-by-slot sum piles up (TjaParser's TimingState). For analysis of note spacing
         // (the servers' difficulty constants); play and the content hash use Time.
         public double RawMs;
+        // Exact scoring duration of a 5/6 drumroll, in microseconds. Independent of Time/EndTime
+        // and excluded from ChartCanonical. Sum the chosen route's durations before rounding.
+        // A manually constructed roll must supply this derived value itself.
+        public TjaFraction ScoreDuration;
         public ScrollMode ScrollMode;
         // OpenTaiko's fBMSCROLLTime in measures of four beats: the beat clock at the note (and at a
         // long note's tail). Written measures advance it whatever the BPM; #DELAY at its BPM.

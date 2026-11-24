@@ -103,7 +103,7 @@ cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # �
 | 成员 | 内容 |
 |---|---|
 | `Chart` | 解析出的谱面；遇到错误不停下，按各错误的恢复规则继续读（头部值读不出用默认、不认识的音符当空白、坏的 `#BPMCHANGE`/`#MEASURE` 丢弃……）。没有该块时为 null |
-| `Diagnostics` | 每一处问题：`Code`（`TJA1001`–`TJA1016` 错误、`TJA2001`–`TJA2016` 警告，见 `Runtime/TjaDiagnostic.cs`）、`Message`（与 `Parse` 的异常、`Warnings` 同一文字）、`Args`、`Line`、`Span` |
+| `Diagnostics` | 每一处问题：`Code`（`TJA1001`–`TJA1017` 错误、`TJA2001`–`TJA2016` 警告（`TJA2005` 已不用），见 `Runtime/TjaDiagnostic.cs`）、`Message`（与 `Parse` 的异常、`Warnings` 同一文字）、`Args`、`Line`、`Span` |
 | `SourceMap` | 音符、连打尾、小节线、各类事件在原文中的位置；`NoteAt(offset)` 反查 |
 | `Measures`、`Played(route)` | 小节表（时刻、BPM、拍长、格数、所属路线），某路线实际经过的小节 |
 | `StateAt(offset)` | 某位置生效的状态：时刻、BPM、SCROLL、拍长、GOGO、小节与格、分歧路线、开着的连打、下一个气球的打数 |
@@ -152,3 +152,28 @@ cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # �
 等价示例（测试 `HashTests`）：`BPM:120` ≡ `BPM:150` + 块首 `#BPMCHANGE 120` ≡ `BPM:240` + `#MEASURE 8/4` + `#SCROLL 0.5` ≡ `BPM:60` + `#MEASURE 2/4` + `#SCROLL 2`；小节中间无效的 `#BPMCHANGE` 也不影响。不等价：OFFSET 变、速度变（只改 SCROLL 或只改 BPM）、BM 滚动下改 MEASURE（节拍时钟间距变）。
 
 **版本规则**：`Runtime/` 里任何会改变 `TaikoChart` 内容或规范文本的改动，都要把 `ChartCanonical.Version` 加一，重新钉住 `KnownVectorTests` 的向量，并让两站对全部谱面重算；只改标题处理、警告文字或性能的改动不升版本。`package.json` 的版本与 git tag 随每次发布更新。
+
+## 真打计分（0.17.0）
+
+`ShinuchiScoring.Of(chart)` 给出一张谱面的真打分数表：良分 `GoodPoints`（初值）、可分 `OkPoints`、黄条与气球每打 `LongHitPoints`（100），以及极分线 `KiwamiThreshold`。它只由谱面决定（难度、音符、气球打数、黄条时长），游戏、网站、编辑器读到的是同一组数字。调用时从音符算出，不进 `ChartCanonical`，不影响哈希。
+
+```text
+c = 6 / 7.5 / 10 / 15 / 15（Easy / Normal / Hard / Oni / Edit）
+k = floor(c × T)，H = ceil(9k / 8)，A = 100 × (B + H)
+良 = max(10, 10 × ceil((1000000 − A) / (10 × N)))；没有 N 时为 1000000
+可 = 良的一半，向下取到 10 分
+极分线 = max(1000000, N × 良 + A)；超过 int 上限时取 int.MaxValue
+```
+
+- `N`（`JudgeableNotes`）：1–4 号音符与 Kadon。Ad-Lib、地雷不算。
+- `B`（`BalloonHits`）：气球与 Kusudama 的要求打数之和，不封顶；非正数不计。
+- `T`（`RollMicroseconds`，微秒）：各黄条 `ScoreDuration` 之和，先求和再取整；负时长的黄条不计。
+- 只统计共通部分与每个分歧的达人路线（没有 `#M` 时取顶替它的路线）。`RouteNotes` 另给三条路线各自的 `N`，供魂槽使用。
+
+**黄条计分时长** `ChartNote.ScoreDuration`（`TjaFraction`，微秒，只对 5／6）在正常解析遍历里算出，与播放用的 `Time`／`EndTime` 互不影响：
+
+- 每拍先取整为 `floor(60000000 / BPM + 1/2)` 微秒，再乘以精确拍数；BPM、`#MEASURE`、`#DELAY` 按原文十进制精确读取，不经过浮点。条内的 `#BPMCHANGE` 分段计算，`#DELAY` 按秒计入，负值照原样。
+- 写明的 `8` 不在本小节十六分网格上时，补 `min(该格拍数, 1/12)` 拍，按结尾处的 BPM 换算。被音符或 `#END` 隐式结束的黄条不补。
+- 分歧前（或分歧开头、第一个 `#N`／`#E`／`#M` 之前）打开的长音符不能在路线里结束，是错误 `TJA1017`（一个音符只有一个结尾，各路线各自的结尾表示不了）。它可以在 `#BRANCHSTART` 之前结束，或者在各路线里都不结束、到分歧之后再结束，这时三条路线的结尾相同。
+- 手工构造的黄条要自己填 `ScoreDuration`，默认为 0。
+- 精确读数保留 40 位小数（含指数的效果），更多的位四舍五入（远离零）；远超 double 的 17 位有效数字，又让超长小数或极端指数的写法不会拖慢逐格计算或耗尽内存。不报错，播放照常按浮点值生效。

@@ -7,7 +7,7 @@ namespace OurTaiko
     // thousands separator.
     public static class TjaNumber
     {
-        static string Normalize(string value) => value.Trim().TrimEnd(',', ' ').Replace(',', '.');
+        internal static string Normalize(string value) => value.Trim().TrimEnd(',', ' ').Replace(',', '.');
 
         public static bool TryParse(string value, out double result)
             => double.TryParse(Normalize(value), NumberStyles.Float, CultureInfo.InvariantCulture, out result);

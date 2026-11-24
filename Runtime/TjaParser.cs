@@ -208,6 +208,31 @@ namespace OurTaiko
             // place is its run's start plus the run's share of the measure, in one multiplication
             // and one division, and the starts are summed with what each sum loses carried over.
             public double RawMs, Beat, Bpm, Measure = 1, ScrollX = 1, ScrollY, Clock16;
+            // Separate scoring clock: source decimals and beat fractions never pass through float.
+            public TjaFraction ScoreMeasure = 1, ScoreBeatMicros = 500000;
+            // Materialize a run only at a tempo/grid boundary or a roll head/tail, not every slot.
+            TjaFraction scoreTime;
+            int scoreRunCount;
+            public TjaFraction ScoreTime
+            {
+                get => scoreRunCount == 0 ? scoreTime : scoreTime + scoreStepMicros * scoreRunCount;
+                set { scoreTime = value; scoreRunCount = 0; }
+            }
+            TjaFraction scoreStepBeats, scoreStepMicros, stepMeasure, stepMicros;
+            int scoreSlots;
+            public TjaFraction ScoreStep(int slots)
+            {
+                if (slots != scoreSlots || !ScoreMeasure.Equals(stepMeasure) || !ScoreBeatMicros.Equals(stepMicros))
+                {
+                    scoreTime = ScoreTime; scoreRunCount = 0;
+                    scoreSlots = slots; stepMeasure = ScoreMeasure; stepMicros = ScoreBeatMicros;
+                    scoreStepBeats = ScoreMeasure * 4 / slots;
+                    scoreStepMicros = ScoreBeatMicros * scoreStepBeats;
+                }
+                return scoreStepBeats;
+            }
+            public void ScoreBpm(TjaFraction bpm)
+                => ScoreBeatMicros = new TjaFraction(((TjaFraction)60000000 / bpm + new TjaFraction(1, 2)).Floor, 1);
             public double SuddenShow = double.PositiveInfinity, SuddenMove = double.PositiveInfinity;
             public bool Barline = true, Gogo;
             public ScrollMode Mode;
@@ -229,6 +254,8 @@ namespace OurTaiko
             // The cursor moves one slot of a measure divided in `slots`.
             public void Step(int slots)
             {
+                ScoreStep(slots);
+                scoreRunCount++;
                 if (runCount == 0 || slots != runSlots || Bpm != runBpm || Measure != runMeasure)
                 {
                     End();
@@ -249,7 +276,11 @@ namespace OurTaiko
             }
 
             // A whole measure at the BPM and length in force.
-            public void MoveMeasure() => Move(15000.0 / Bpm * Measure * 16.0, 4 * Measure, Measure * 16.0);
+            public void MoveMeasure()
+            {
+                ScoreTime += ScoreBeatMicros * ScoreMeasure * 4;
+                Move(15000.0 / Bpm * Measure * 16.0, 4 * Measure, Measure * 16.0);
+            }
 
             // The run ends where the cursor is: at its measure's end, or where the BPM, the measure
             // length or a delay comes between two slots.
@@ -321,6 +352,8 @@ namespace OurTaiko
             readonly List<int> pending = new List<int>();
             int pendingNotes;
             TimingState state, branchStart;
+            // Where each drumroll still unscored began on the scoring clock.
+            readonly Dictionary<ChartNote, TjaFraction> scoreStarts = new Dictionary<ChartNote, TjaFraction>();
             ChartBranch branch;
             readonly bool[] routesSeen = new bool[3];
             BranchRoute route;
@@ -330,7 +363,7 @@ namespace OurTaiko
             readonly double?[] lastBar = new double?[3], rollEndAfterBar = new double?[3];
             // OpenTaiko keeps the open roll per route (nNowRollCountBranch): a head outside a route
             // opens on all three, a head on a route only there. Closed heads are remembered so a
-            // second route closing a shared head keeps the first end.
+            // second route closing a shared head (an error, see CloseRoll) keeps the first end.
             readonly ChartNote[] openRoll = new ChartNote[3];
             readonly HashSet<ChartNote> closedRolls = new HashSet<ChartNote>();
             int measure;
@@ -393,6 +426,16 @@ namespace OurTaiko
                     result = 0;
                     return false;
                 }
+            }
+
+            // The scoring clock's reading of a number already read as a finite double. Every such
+            // number reads (long decimals are rounded, see TjaFraction.MaxDecimals); one that did not
+            // would be an error of this reader, reported rather than scored wrong.
+            bool ReadFraction(string text, out TjaFraction value)
+            {
+                if (TjaFraction.TryParse(text, out value)) return true;
+                Error(TjaDiagnosticKind.NumberUnreadable, "Exact timing number is unreadable.");
+                return false;
             }
 
             // Where a header's value is, for its problems.
@@ -502,10 +545,15 @@ namespace OurTaiko
                 }
                 // Recovery: an unreadable BPM or OFFSET keeps the default (120, 0); a BPM that is not
                 // positive and finite is 120.
+                TjaFraction scoreBpm = 120;
                 if (bpm != null)
                 {
                     AtHeader(bpmLine, bpmSource);
-                    if (ReadNumber(bpm, out double tempo)) chart.Bpm = tempo;
+                    if (ReadNumber(bpm, out double tempo))
+                    {
+                        chart.Bpm = tempo;
+                        if (tempo > 0 && !double.IsInfinity(tempo) && ReadFraction(bpm, out var exact)) scoreBpm = exact;
+                    }
                 }
                 // OFFSET to the grid of chart times. OpenTaiko cuts it to a whole millisecond, which
                 // also reads one in a hundred three-decimal values a millisecond off (-4.095 as -4094).
@@ -524,6 +572,7 @@ namespace OurTaiko
 
                 offsetMs = TjaTime.Millis(chart.Offset);
                 state = new TimingState { Bpm = chart.Bpm, Mode = startMode };
+                state.ScoreBpm(scoreBpm);
                 chart.NoteLists.Add(common);
                 AddClockPoint();
                 Read(endLine, endSpan);
@@ -721,18 +770,25 @@ namespace OurTaiko
                 return count;
             }
 
-            // Ends a roll here on the routes being written. A head shared by several routes keeps
-            // the end the first route gave it (one ChartNote has one EndTime); a later route that
-            // ends it elsewhere is warned about, and still gets the tail entry in its own list.
-            void CloseRoll(ChartNote note, List<ChartEntry> entries)
+            // Ends a long note here on the routes being written. One opened outside the routes is
+            // shared by all three, and one ChartNote has one end, so ending it on a route is an
+            // error (it may run through the branch and end after it). Recovery: the first route to
+            // end it gives its end, for play and for scoring; the others still get the tail entry
+            // in their own lists.
+            void CloseRoll(ChartNote note, List<ChartEntry> entries, TjaFraction tailPadding = default)
             {
+                if (InRoute && note.BranchId < 0) Error(TjaDiagnosticKind.RollEndsInRoute, Where);
                 if (closedRolls.Add(note))
                 {
                     note.EndTime = Now;
                     note.TailBpm = state.Bpm;
                     note.EndScrollClock = state.Clock16 / 16;
+                    if (scoreStarts.TryGetValue(note, out var scoreStart))
+                    {
+                        note.ScoreDuration = state.ScoreTime - scoreStart + tailPadding;
+                        scoreStarts.Remove(note);
+                    }
                 }
-                else if (note.EndTime != Now) Warn(TjaDiagnosticKind.SharedRollEndsDiffer, Where);
                 for (int r = FirstRoute, last = LastRoute; r <= last; r++)
                     if (openRoll[r] == note) { openRoll[r] = null; rollEndAfterBar[r] = Math.Max(rollEndAfterBar[r] ?? Now, Now); }
                 entries.Add(new ChartEntry(note, true));
@@ -947,6 +1003,7 @@ namespace OurTaiko
             {
                 if (!ReadNumber(arg, out double bpm)) return;
                 if (!(bpm > 0) || double.IsInfinity(bpm)) { Error(TjaDiagnosticKind.InvalidBpmChange); return; }
+                if (ReadFraction(arg, out var exact)) state.ScoreBpm(exact);
                 state.Bpm = bpm;
                 var tempo = new ChartTempo { Time = Now, ResumeTime = Now, Beat = state.Beat, Bpm = state.Bpm, BranchId = BranchId, Route = route };
                 chart.Tempos.Add(tempo);
@@ -969,6 +1026,8 @@ namespace OurTaiko
                 if (!ReadNumber(parts[0], out double beats) || !ReadNumber(parts[1], out double unit)) return;
                 double length = (float)beats / (float)unit;
                 if (!(length > 0) || double.IsInfinity(length)) { Error(TjaDiagnosticKind.InvalidMeasure); return; }
+                if (ReadFraction(parts[0], out var exactBeats) && ReadFraction(parts[1], out var exactUnit))
+                    state.ScoreMeasure = exactBeats / exactUnit;
                 state.Measure = length;
             }
 
@@ -983,6 +1042,7 @@ namespace OurTaiko
             bool Delay(string arg)
             {
                 if (!TjaNumber.TryParse(arg, out double delay) || double.IsNaN(delay) || double.IsInfinity(delay)) return false;
+                if (ReadFraction(arg, out var exact)) state.ScoreTime += exact * 1000000;
                 double start = Now;
                 // The beat clock keeps running through a delay (OpenTaiko dbNowBMScollTime).
                 state.Move(delay * 1000, 0, delay * 1000 * state.Bpm / 15000);
@@ -1060,6 +1120,7 @@ namespace OurTaiko
             void Flush(bool atComma = true)
             {
                 int slots = pendingNotes, index = 0, commaLine = line;
+                TjaFraction scorePosition = 0;
                 var commaSpan = span;
                 bool addedBar = false;
                 ChartNote bar = null;
@@ -1107,7 +1168,14 @@ namespace OurTaiko
                     if (type == 8)
                     {
                         int open = OpenRolls();
-                        for (int k = 0; k < open; k++) CloseRoll(openHeads[k], Entries);
+                        TjaFraction padding = 0;
+                        if (open > 0 && !(scorePosition * 4).IsInteger)
+                        {
+                            var step = state.ScoreStep(slots);
+                            var maximum = new TjaFraction(1, 12);
+                            padding = (step < maximum ? step : maximum) * state.ScoreBeatMicros;
+                        }
+                        for (int k = 0; k < open; k++) CloseRoll(openHeads[k], Entries, padding);
                         if (open == 0) Warn(TjaDiagnosticKind.StrayRollEnd, Where);
                     }
                     else if (type != 0)
@@ -1122,6 +1190,7 @@ namespace OurTaiko
                         if (type == Unused) { Warn(TjaDiagnosticKind.UnusedNoteE, Where); blank = true; }
                         if (blank) goto advance;
                         var note = NewNote(); note.Kind = (NoteKind)type;
+                        if (note.IsDrumroll) scoreStarts.Add(note, state.ScoreTime);
                         if (note.IsBalloon)
                         {
                             // The list the count comes from: the route's, or outside a route the Normal one.
@@ -1139,6 +1208,7 @@ namespace OurTaiko
                         if (note.IsLong) for (int r = FirstRoute, last = LastRoute; r <= last; r++) openRoll[r] = note;
                     }
                     advance:
+                    scorePosition += state.ScoreStep(slots);
                     state.Step(slots);
                     index++;
                 }
