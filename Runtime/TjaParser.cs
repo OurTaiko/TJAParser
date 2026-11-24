@@ -354,10 +354,6 @@ namespace OurTaiko
             TimingState state, branchStart;
             // Where each drumroll still unscored began on the scoring clock.
             readonly Dictionary<ChartNote, TjaFraction> scoreStarts = new Dictionary<ChartNote, TjaFraction>();
-            // A roll from before the branch, ended on its routes: its scoring duration on each route.
-            // It scores as the Master route (or the route drawn in its place) ends it, which is known
-            // once the branch ends (EndBranch), whatever route is written first.
-            readonly Dictionary<ChartNote, TjaFraction?[]> routeScores = new Dictionary<ChartNote, TjaFraction?[]>();
             ChartBranch branch;
             readonly bool[] routesSeen = new bool[3];
             BranchRoute route;
@@ -367,7 +363,7 @@ namespace OurTaiko
             readonly double?[] lastBar = new double?[3], rollEndAfterBar = new double?[3];
             // OpenTaiko keeps the open roll per route (nNowRollCountBranch): a head outside a route
             // opens on all three, a head on a route only there. Closed heads are remembered so a
-            // second route closing a shared head keeps the first end.
+            // second route closing a shared head (an error, see CloseRoll) keeps the first end.
             readonly ChartNote[] openRoll = new ChartNote[3];
             readonly HashSet<ChartNote> closedRolls = new HashSet<ChartNote>();
             int measure;
@@ -774,33 +770,25 @@ namespace OurTaiko
                 return count;
             }
 
-            // Ends a roll here on the routes being written. A head shared by several routes keeps
-            // the end the first route gave it (one ChartNote has one EndTime); a later route that
-            // ends it elsewhere is warned about, and still gets the tail entry in its own list.
-            // Its scoring duration is the Master route's instead (see routeScores).
+            // Ends a long note here on the routes being written. One opened outside the routes is
+            // shared by all three, and one ChartNote has one end, so ending it on a route is an
+            // error (it may run through the branch and end after it). Recovery: the first route to
+            // end it gives its end, for play and for scoring; the others still get the tail entry
+            // in their own lists.
             void CloseRoll(ChartNote note, List<ChartEntry> entries, TjaFraction tailPadding = default)
             {
-                if (scoreStarts.TryGetValue(note, out var scoreStart))
-                {
-                    var duration = state.ScoreTime - scoreStart + tailPadding;
-                    if (InRoute && note.BranchId != BranchId)
-                    {
-                        if (!routeScores.TryGetValue(note, out var byRoute)) routeScores.Add(note, byRoute = new TjaFraction?[3]);
-                        byRoute[(int)route] = duration;
-                    }
-                    else
-                    {
-                        note.ScoreDuration = duration;
-                        scoreStarts.Remove(note);
-                    }
-                }
+                if (InRoute && note.BranchId < 0) Error(TjaDiagnosticKind.RollEndsInRoute, Where);
                 if (closedRolls.Add(note))
                 {
                     note.EndTime = Now;
                     note.TailBpm = state.Bpm;
                     note.EndScrollClock = state.Clock16 / 16;
+                    if (scoreStarts.TryGetValue(note, out var scoreStart))
+                    {
+                        note.ScoreDuration = state.ScoreTime - scoreStart + tailPadding;
+                        scoreStarts.Remove(note);
+                    }
                 }
-                else if (note.EndTime != Now) Warn(TjaDiagnosticKind.SharedRollEndsDiffer, Where);
                 for (int r = FirstRoute, last = LastRoute; r <= last; r++)
                     if (openRoll[r] == note) { openRoll[r] = null; rollEndAfterBar[r] = Math.Max(rollEndAfterBar[r] ?? Now, Now); }
                 entries.Add(new ChartEntry(note, true));
@@ -815,15 +803,6 @@ namespace OurTaiko
                 if (!routesSeen[1]) branch.Routes[1] = BranchRoute.Normal;
                 if (!routesSeen[2]) branch.Routes[2] = branch.Routes[1];
                 branch.EndTime = Now;
-                // Rolls from before the branch score as the Master route ended them. One that route
-                // left open is scored where it ends after the branch.
-                if (routeScores.Count > 0)
-                {
-                    int master = (int)branch.ResolveRoute(BranchRoute.Master);
-                    foreach (var pair in routeScores)
-                        if (pair.Value[master] is TjaFraction duration) { pair.Key.ScoreDuration = duration; scoreStarts.Remove(pair.Key); }
-                    routeScores.Clear();
-                }
                 // As in OurTaikoPlayer, common notes continue from the final authored route.
                 branch = null; hasRoute = false; branchBar = false;
                 // OpenTaiko GotoBranchEnd: every route's beat clock continues from here.

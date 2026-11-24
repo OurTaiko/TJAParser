@@ -103,7 +103,7 @@ cd dotnet~ && dotnet publish tjaparser -c Release -r linux-musl-x64 -o out   # �
 | 成员 | 内容 |
 |---|---|
 | `Chart` | 解析出的谱面；遇到错误不停下，按各错误的恢复规则继续读（头部值读不出用默认、不认识的音符当空白、坏的 `#BPMCHANGE`/`#MEASURE` 丢弃……）。没有该块时为 null |
-| `Diagnostics` | 每一处问题：`Code`（`TJA1001`–`TJA1016` 错误、`TJA2001`–`TJA2016` 警告，见 `Runtime/TjaDiagnostic.cs`）、`Message`（与 `Parse` 的异常、`Warnings` 同一文字）、`Args`、`Line`、`Span` |
+| `Diagnostics` | 每一处问题：`Code`（`TJA1001`–`TJA1017` 错误、`TJA2001`–`TJA2016` 警告（`TJA2005` 已不用），见 `Runtime/TjaDiagnostic.cs`）、`Message`（与 `Parse` 的异常、`Warnings` 同一文字）、`Args`、`Line`、`Span` |
 | `SourceMap` | 音符、连打尾、小节线、各类事件在原文中的位置；`NoteAt(offset)` 反查 |
 | `Measures`、`Played(route)` | 小节表（时刻、BPM、拍长、格数、所属路线），某路线实际经过的小节 |
 | `StateAt(offset)` | 某位置生效的状态：时刻、BPM、SCROLL、拍长、GOGO、小节与格、分歧路线、开着的连打、下一个气球的打数 |
@@ -174,6 +174,6 @@ k = floor(c × T)，H = ceil(9k / 8)，A = 100 × (B + H)
 
 - 每拍先取整为 `floor(60000000 / BPM + 1/2)` 微秒，再乘以精确拍数；BPM、`#MEASURE`、`#DELAY` 按原文十进制精确读取，不经过浮点。条内的 `#BPMCHANGE` 分段计算，`#DELAY` 按秒计入，负值照原样。
 - 写明的 `8` 不在本小节十六分网格上时，补 `min(该格拍数, 1/12)` 拍，按结尾处的 BPM 换算。被音符或 `#END` 隐式结束的黄条不补。
-- 分歧前开始、在各路线里结束的黄条，按达人路线（或顶替它的路线）的结尾计时；达人路线没结束它时，按它在分歧之后结束的位置计。播放的 `EndTime` 仍取最先写的路线。
+- 分歧前（或分歧开头、第一个 `#N`／`#E`／`#M` 之前）打开的长音符不能在路线里结束，是错误 `TJA1017`（一个音符只有一个结尾，各路线各自的结尾表示不了）。它可以在 `#BRANCHSTART` 之前结束，或者在各路线里都不结束、到分歧之后再结束，这时三条路线的结尾相同。
 - 手工构造的黄条要自己填 `ScoreDuration`，默认为 0。
 - 精确读数保留 40 位小数（含指数的效果），更多的位四舍五入（远离零）；远超 double 的 17 位有效数字，又让超长小数或极端指数的写法不会拖慢逐格计算或耗尽内存。不报错，播放照常按浮点值生效。

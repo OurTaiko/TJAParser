@@ -61,6 +61,9 @@ namespace OurTaiko
         public static readonly TjaDiagnosticKind BranchEndWithoutStart = Error("TJA1014", "#BRANCHEND without #BRANCHSTART.");
         public static readonly TjaDiagnosticKind RouteWithoutBranch = Error("TJA1015", "Route marker without #BRANCHSTART.");
         public static readonly TjaDiagnosticKind DuplicateRoute = Error("TJA1016", "Duplicate branch route: {0}");
+        // A note has one end, so a long note the routes share cannot end on one of them: end it
+        // before #BRANCHSTART, or let it run through the branch and end after it.
+        public static readonly TjaDiagnosticKind RollEndsInRoute = Error("TJA1017", "A long note opened before the routes ends inside one (measure {0}): end it before #BRANCHSTART or after the branch.");
 
         // Warnings.
         public static readonly TjaDiagnosticKind EndMissing = Warning("TJA2001", "#END missing");
@@ -68,7 +71,6 @@ namespace OurTaiko
         public static readonly TjaDiagnosticKind BalloonHeaderUnreadable = Warning("TJA2002", "{0}");
         public static readonly TjaDiagnosticKind LastMeasureWithoutComma = Warning("TJA2003", "Last measure without a comma");
         public static readonly TjaDiagnosticKind RollEndedByEnd = Warning("TJA2004", "An unended roll is ended by #END");
-        public static readonly TjaDiagnosticKind SharedRollEndsDiffer = Warning("TJA2005", "A roll shared by the routes ends at different times; the first end is kept (measure {0})");
         public static readonly TjaDiagnosticKind BranchWithoutNormal = Warning("TJA2006", "Branch {0} has no #N: its normal route is empty");
         public static readonly TjaDiagnosticKind BranchConditionUnreadable = Warning("TJA2007", "#BRANCHSTART {0}");
         public static readonly TjaDiagnosticKind CommonNotesInBranch = Warning("TJA2008", "Notes between #BRANCHSTART and its first #N/#E/#M are common and overlap the routes (measure {0})");

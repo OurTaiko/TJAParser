@@ -112,15 +112,6 @@ public class ShinuchiScoringTests
         Assert.Equal(332500, score.GoodPoints);
     }
 
-    [Fact]
-    public void SharedRollUsesTheMasterRoutesDuration()
-    {
-        // Normal ends the roll first at 3 s; Master at 3.5 s: k = floor(15 × 3.5) = 52, H = 59.
-        var score = Score("1000,\n5000,\n#BRANCHSTART p,50,80\n#N\n0080,\n#E\n0080,\n#M\n0008,\n#BRANCHEND");
-        Assert.Equal((TjaFraction)3500000, score.RollMicroseconds);
-        Assert.Equal(994100, score.GoodPoints);
-    }
-
     [Theory]
     [InlineData(9999, 50, 1000000)]
     [InlineData(10000, 10, 1000020)]

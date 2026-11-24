@@ -31,12 +31,12 @@ public class DiagnosticTests
         Case(TjaDiagnosticKind.BranchEndWithoutStart, Block("#BRANCHEND\n1,\n"), "#BRANCHEND"),
         Case(TjaDiagnosticKind.RouteWithoutBranch, Block("#N\n1,\n"), "#N"),
         Case(TjaDiagnosticKind.DuplicateRoute, Block(Branch + "#N\n1,\n#n\n1,\n#BRANCHEND\n"), "#n"),
+        Case(TjaDiagnosticKind.RollEndsInRoute, Block("5,\n" + Branch + "#N\n8,\n#BRANCHEND\n"), "8"),
 
         Case(TjaDiagnosticKind.EndMissing, "BPM:120\nCOURSE:Oni\n#START\n1,\nCOURSE:Easy\n", ""),
         Case(TjaDiagnosticKind.BalloonHeaderUnreadable, "BPM:120\nCOURSE:Oni\nBALLOON:1,x\n#START\n7008,\n#END\n", "BALLOON:1,x"),
         Case(TjaDiagnosticKind.LastMeasureWithoutComma, Block("1,\n12\n"), "2"),
         Case(TjaDiagnosticKind.RollEndedByEnd, Block("5000,\n"), "#END"),
-        Case(TjaDiagnosticKind.SharedRollEndsDiffer, Block(Branch + "5,\n#N\n8,\n#E\n08,\n#M\n8,\n#BRANCHEND\n"), "8"),
         Case(TjaDiagnosticKind.BranchWithoutNormal, Block(Branch + "#E\n1,\n#BRANCHEND\n"), "#BRANCHEND"),
         Case(TjaDiagnosticKind.BranchConditionUnreadable, Block("#BRANCHSTART x,1,2\n#N\n1,\n#BRANCHEND\n"), "#BRANCHSTART x,1,2"),
         Case(TjaDiagnosticKind.CommonNotesInBranch, Block(Branch + "2,\n#N\n1,\n#BRANCHEND\n"), "2"),

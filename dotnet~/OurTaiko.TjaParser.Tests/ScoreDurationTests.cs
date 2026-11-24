@@ -83,18 +83,27 @@ public class ScoreDurationTests
         Assert.Equal(new TjaFraction[] { 1500000, 750000, 1500000, 1125000, 1125000 }, chart.Notes.Select(n => n.ScoreDuration));
     }
 
-    // A roll from before a branch scores as the Master route ends it; play keeps the first route's end.
+    // One ChartNote has one end, so a long note the routes share cannot end on one of them
+    // (TJA1017), whether a route's 8 or a route's note ends it.
     [Theory]
-    [InlineData("#N\n0080,\n#E\n8000,\n#M\n0008,", 3500000, 3)]
-    [InlineData("#M\n0008,\n#N\n0080,\n#E\n8000,", 3500000, 3.5)]
-    [InlineData("#N\n0080,\n#E\n8000,", 2000000, 3)]
-    [InlineData("#N\n0080,", 3000000, 3)]
-    [InlineData("#N\n0080,\n#M\n0000,\n#BRANCHEND\n8000,", 4000000, 3)]
-    public void SharedRollScoresAsTheMasterRouteEndsIt(string routes, int micros, double endTime)
+    [InlineData("5000,\n#BRANCHSTART p,50,80\n#N\n0080,\n#E\n8000,\n#M\n0008,\n#BRANCHEND")]
+    [InlineData("5000,\n#BRANCHSTART p,50,80\n#M\n0008,\n#N\n0000,\n#BRANCHEND\n8,")]
+    [InlineData("7000,\n#BRANCHSTART p,50,80\n#N\n1000,\n#BRANCHEND")]
+    [InlineData("#BRANCHSTART p,50,80\n9000,\n#E\n0800,\n#BRANCHEND")]
+    public void ALongNoteFromBeforeTheRoutesCannotEndOnOne(string body)
     {
-        var chart = Parse("5000,\n#BRANCHSTART p,50,80\n" + routes);
-        Assert.Equal((TjaFraction)micros, Duration(chart));
-        Assert.Equal(endTime, chart.Notes.Single().EndTime);
+        string source = "BPM:120\nCOURSE:Oni\n#START\n" + body + "\n#END";
+        Assert.Contains(TjaParser.Analyze(source).Diagnostics, d => d.Kind == TjaDiagnosticKind.RollEndsInRoute);
+        Assert.Throws<FormatException>(() => TjaParser.Parse(source));
+    }
+
+    [Fact]
+    public void ALongNoteMayRunThroughTheWholeBranch()
+    {
+        // Open on every route, it ends after the branch, at the same time whatever route is played.
+        var roll = Parse("5000,\n#BRANCHSTART p,50,80\n#N\n0000,\n#E\n0000,\n#M\n0000,\n#BRANCHEND\n0080,").Notes.Single();
+        Assert.Equal(5, roll.EndTime);
+        Assert.Equal((TjaFraction)5000000, roll.ScoreDuration);
     }
 
     [Fact]
